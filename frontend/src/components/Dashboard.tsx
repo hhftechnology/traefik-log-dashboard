@@ -8,7 +8,7 @@ import { Activity, AlertCircle, Server } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
 export function Dashboard() {
-  const { logs, stats, isConnected } = useWebSocket();
+  const { logs, stats, isConnected, requestLogs } = useWebSocket();
 
   const statusCodeData = stats ? Object.entries(stats.statusCodes).map(([code, count]) => ({
     name: code,
@@ -61,7 +61,7 @@ export function Dashboard() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }: { name: string, percent: number }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    innerRadius={60}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
@@ -125,7 +125,7 @@ export function Dashboard() {
           <CardDescription>Real-time log entries</CardDescription>
         </CardHeader>
         <CardContent>
-          <LogTable logs={logs} />
+          <LogTable logs={logs} requestLogs={requestLogs} />
         </CardContent>
       </Card>
     </div>

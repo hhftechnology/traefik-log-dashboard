@@ -24,6 +24,8 @@
     "lucide-react": "^0.309.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-simple-maps": "^3.0.0",
+    "react-tooltip": "^5.26.3",
     "recharts": "^2.10.3",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7"

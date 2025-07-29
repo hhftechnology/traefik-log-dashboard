@@ -50,9 +50,6 @@ export function useWebSocket() {
   const connect = useCallback(() => {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // This is the corrected URL.
-      // It connects to the Nginx proxy within the frontend container,
-      // which then forwards the request to the backend.
       const wsUrl = `${protocol}//${window.location.host}/ws`;
       
       ws.current = new WebSocket(wsUrl);
@@ -74,10 +71,8 @@ export function useWebSocket() {
             setLogs(prev => [message.data, ...prev].slice(0, 1000));
             break;
           case 'logs':
-            if (Array.isArray(message.data)) {
-              setLogs(message.data);
-            } else {
-              setLogs(message.data.logs || []);
+            if (Array.isArray(message.data.logs)) {
+              setLogs(prev => [...prev, ...message.data.logs]);
             }
             break;
           case 'stats':
@@ -89,7 +84,6 @@ export function useWebSocket() {
       ws.current.onclose = () => {
         console.log('WebSocket disconnected');
         setIsConnected(false);
-        // Reconnect after 3 seconds
         reconnectTimeout.current = setTimeout(connect, 3000);
       };
 

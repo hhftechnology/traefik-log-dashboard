@@ -28,21 +28,18 @@ export class LogParser extends EventEmitter {
   }
 
   async setLogFile(filePath) {
-    // Stop existing tail if any
     if (this.tail) {
       this.tail.unwatch();
     }
 
-    // Check if file exists
     try {
       await fs.access(filePath);
     } catch (error) {
       throw new Error(`Log file not found: ${filePath}`);
     }
 
-    // Start tailing the file
     this.tail = new Tail(filePath, {
-      fromBeginning: false,
+      fromBeginning: true, // Read from the beginning to get all logs
       follow: true,
       logger: console
     });
@@ -55,31 +52,12 @@ export class LogParser extends EventEmitter {
       console.error('Tail error:', error);
       this.emit('error', error);
     });
-
-    // Process existing file content
-    await this.processExistingFile(filePath);
-  }
-
-  async processExistingFile(filePath) {
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const lines = content.split('\n').filter(line => line.trim());
-      
-      // Process last 1000 lines for initial data
-      const lastLines = lines.slice(-1000);
-      for (const line of lastLines) {
-        await this.parseLine(line, false); // Don't emit events for initial load
-      }
-    } catch (error) {
-      console.error('Error processing existing file:', error);
-    }
   }
 
   async parseLine(line, emit = true) {
     try {
       const log = JSON.parse(line);
       
-      // Extract relevant fields
       const parsedLog = {
         id: `${Date.now()}-${Math.random()}`,
         timestamp: log.time || new Date().toISOString(),
@@ -87,7 +65,7 @@ export class LogParser extends EventEmitter {
         method: log.RequestMethod || log.request_method || 'GET',
         path: log.RequestPath || log.request_path || '',
         status: parseInt(log.DownstreamStatus || log.downstream_status || 0),
-        responseTime: parseFloat(log.Duration || log.duration || 0) * 1000, // Convert to ms
+        responseTime: parseFloat(log.Duration || log.duration || 0) * 1000,
         serviceName: log.ServiceName || log.service_name || 'unknown',
         routerName: log.RouterName || log.router_name || 'unknown',
         host: log.RequestHost || log.request_host || '',
@@ -97,7 +75,6 @@ export class LogParser extends EventEmitter {
         city: null
       };
 
-      // Get geolocation (with caching)
       if (parsedLog.clientIP) {
         const geoData = await getGeoLocation(parsedLog.clientIP);
         if (geoData) {
@@ -109,27 +86,25 @@ export class LogParser extends EventEmitter {
         }
       }
 
-      // Update stats
       this.updateStats(parsedLog);
 
-      // Add to logs array
       this.logs.unshift(parsedLog);
       if (this.logs.length > this.maxLogs) {
         this.logs.pop();
       }
 
-      // Emit event for real-time updates
       if (emit) {
         this.emit('newLog', parsedLog);
       }
 
     } catch (error) {
+      // It's possible that some lines in the log are not valid JSON.
+      // We'll log the error but continue processing.
       console.error('Error parsing log line:', error, line);
     }
   }
 
   extractIP(clientAddr) {
-    // Extract IP from "IP:Port" format
     const match = clientAddr.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
     return match ? match[1] : clientAddr;
   }
@@ -137,7 +112,6 @@ export class LogParser extends EventEmitter {
   updateStats(log) {
     this.stats.totalRequests++;
 
-    // Status codes
     const statusGroup = Math.floor(log.status / 100) * 100;
     this.stats.statusCodes[log.status] = (this.stats.statusCodes[log.status] || 0) + 1;
 
@@ -145,28 +119,18 @@ export class LogParser extends EventEmitter {
     else if (statusGroup === 400) this.stats.requests4xx++;
     else if (statusGroup === 500) this.stats.requests5xx++;
 
-    // Services
     this.stats.services[log.serviceName] = (this.stats.services[log.serviceName] || 0) + 1;
-
-    // Routers
     this.stats.routers[log.routerName] = (this.stats.routers[log.routerName] || 0) + 1;
-
-    // Methods
     this.stats.methods[log.method] = (this.stats.methods[log.method] || 0) + 1;
-
-    // Top IPs
     this.stats.topIPs[log.clientIP] = (this.stats.topIPs[log.clientIP] || 0) + 1;
 
-    // Countries
     if (log.country) {
       this.stats.countries[log.country] = (this.stats.countries[log.country] || 0) + 1;
     }
 
-    // Calculate average response time
     const totalResponseTime = this.logs.reduce((acc, l) => acc + l.responseTime, 0);
     this.stats.avgResponseTime = this.logs.length > 0 ? totalResponseTime / this.logs.length : 0;
 
-    // Calculate requests per second
     const now = Date.now();
     if (now - this.lastTimestamp >= 1000) {
       this.stats.requestsPerSecond = this.requestsInLastSecond;
@@ -178,13 +142,11 @@ export class LogParser extends EventEmitter {
   }
 
   async getStats() {
-    // Get top 10 IPs
     const topIPs = Object.entries(this.stats.topIPs)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 10)
       .map(([ip, count]) => ({ ip, count }));
 
-    // Get top countries
     const topCountries = Object.entries(this.stats.countries)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 10)
@@ -198,10 +160,9 @@ export class LogParser extends EventEmitter {
     };
   }
 
-  async getLogs({ page = 1, limit = 100, filters = {} }) {
+  async getLogs({ page = 1, limit = 50, filters = {} }) {
     let filteredLogs = [...this.logs];
 
-    // Apply filters
     if (filters.service) {
       filteredLogs = filteredLogs.filter(log => log.serviceName === filters.service);
     }
@@ -212,7 +173,6 @@ export class LogParser extends EventEmitter {
       filteredLogs = filteredLogs.filter(log => log.routerName === filters.router);
     }
 
-    // Pagination
     const start = (page - 1) * limit;
     const end = start + limit;
     const paginatedLogs = filteredLogs.slice(start, end);

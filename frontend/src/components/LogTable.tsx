@@ -10,12 +10,43 @@ import {
 import { LogEntry } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
 import { Globe, Server, Router } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 interface LogTableProps {
   logs: LogEntry[];
+  requestLogs: (params: { page: number, limit: number }) => void;
 }
 
-export function LogTable({ logs }: LogTableProps) {
+export function LogTable({ logs, requestLogs }: LogTableProps) {
+  const [page, setPage] = useState(1);
+  const observer = useRef<IntersectionObserver | null>(null);
+  const loader = useRef<HTMLTableRowElement | null>(null);
+
+  useEffect(() => {
+    if (observer.current) observer.current.disconnect();
+
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        setPage(prevPage => prevPage + 1);
+      }
+    });
+
+    if (loader.current) {
+      observer.current.observe(loader.current);
+    }
+
+    return () => {
+      if (observer.current) observer.current.disconnect();
+    };
+  }, [logs]);
+
+  useEffect(() => {
+    if (page > 1) {
+      requestLogs({ page, limit: 50 });
+    }
+  }, [page, requestLogs]);
+
+
   const getStatusBadgeVariant = (status: number) => {
     if (status >= 200 && status < 300) return "success";
     if (status >= 300 && status < 400) return "secondary";
@@ -128,6 +159,11 @@ export function LogTable({ logs }: LogTableProps) {
               );
             })
           )}
+          <TableRow ref={loader}>
+            <TableCell colSpan={10} className="text-center text-muted-foreground">
+              Loading more logs...
+            </TableCell>
+          </TableRow>
         </TableBody>
       </Table>
     </div>
