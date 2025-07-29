@@ -8,7 +8,7 @@ interface GeoMapProps {
   stats: Stats | null;
 }
 
-const geoUrl = "https://raw.githubusercontent.com/deldersveld/topojson/master/world-countries.json";
+const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
 export function GeoMap({ stats }: GeoMapProps) {
   if (!stats || !stats.topCountries) {
@@ -30,7 +30,7 @@ export function GeoMap({ stats }: GeoMapProps) {
     );
   }
 
-  const countryData = stats.topCountries.reduce<Record<string, number>>((acc, { country, count }) => {
+  const countryData = stats.topCountries.reduce((acc, { country, count }) => {
     acc[country] = count;
     return acc;
   }, {});
