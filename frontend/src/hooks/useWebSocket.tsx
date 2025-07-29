@@ -50,7 +50,10 @@ export function useWebSocket() {
   const connect = useCallback(() => {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.hostname}:3001`;
+      // This is the corrected URL.
+      // It connects to the Nginx proxy within the frontend container,
+      // which then forwards the request to the backend.
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
       
       ws.current = new WebSocket(wsUrl);
 
