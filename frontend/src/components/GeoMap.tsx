@@ -30,7 +30,7 @@ export function GeoMap({ stats }: GeoMapProps) {
     );
   }
 
-  const countryData = stats.topCountries.reduce((acc, { country, count }) => {
+  const countryData = stats.topCountries.reduce<Record<string, number>>((acc, { country, count }) => {
     acc[country] = count;
     return acc;
   }, {});
