@@ -35,23 +35,48 @@ export class LogParser extends EventEmitter {
     try {
       await fs.access(filePath);
     } catch (error) {
-      throw new Error(`Log file not found: ${filePath}`);
+      console.error(`Log file not found, will watch for its creation: ${filePath}`);
     }
 
+    // Process recent history first to populate the dashboard without hitting rate limits
+    await this.processExistingFile(filePath);
+
+    // Now, tail the file for new lines
     this.tail = new Tail(filePath, {
-      fromBeginning: true, // Read from the beginning to get all logs
+      fromBeginning: false,
       follow: true,
       logger: console
     });
 
     this.tail.on('line', async (line) => {
-      await this.parseLine(line);
+      await this.parseLine(line, true);
     });
 
     this.tail.on('error', (error) => {
       console.error('Tail error:', error);
       this.emit('error', error);
     });
+  }
+
+  async processExistingFile(filePath) {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const lines = content.split('\n').filter(line => line.trim());
+      
+      const recentLines = lines.slice(-1000);
+      console.log(`Processing ${recentLines.length} recent log entries...`);
+
+      for (const line of recentLines) {
+        await this.parseLine(line, false); // Don't emit 'newLog' for each historical entry
+        // Stagger the API calls to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 50)); // ~20 req/sec
+      }
+      console.log('Finished processing recent log entries.');
+    } catch (error) {
+      if (error.code !== 'ENOENT') { // Ignore "file not found" as it might be created later
+        console.error('Error processing existing log file:', error);
+      }
+    }
   }
 
   async parseLine(line, emit = true) {
@@ -61,29 +86,26 @@ export class LogParser extends EventEmitter {
       const parsedLog = {
         id: `${Date.now()}-${Math.random()}`,
         timestamp: log.time || new Date().toISOString(),
-        clientIP: this.extractIP(log.ClientAddr || log.request_ClientAddr || ''),
-        method: log.RequestMethod || log.request_method || 'GET',
-        path: log.RequestPath || log.request_path || '',
-        status: parseInt(log.DownstreamStatus || log.downstream_status || 0),
-        responseTime: parseFloat(log.Duration || log.duration || 0) * 1000,
-        serviceName: log.ServiceName || log.service_name || 'unknown',
-        routerName: log.RouterName || log.router_name || 'unknown',
-        host: log.RequestHost || log.request_host || '',
-        userAgent: log['request_User-Agent'] || log.user_agent || '',
-        size: parseInt(log.DownstreamContentSize || log.downstream_content_size || 0),
-        country: null,
-        city: null
+        clientIP: this.extractIP(log.ClientAddr || ''),
+        method: log.RequestMethod || 'GET',
+        path: log.RequestPath || '',
+        status: parseInt(log.DownstreamStatus || 0),
+        responseTime: parseFloat(log.Duration || 0), // Duration is in nanoseconds
+        serviceName: log.ServiceName || 'unknown',
+        routerName: log.RouterName || 'unknown',
+        host: log.RequestHost || '',
+        userAgent: log['request_User-Agent'] || '',
+        size: parseInt(log.DownstreamContentSize || 0),
       };
 
-      if (parsedLog.clientIP) {
-        const geoData = await getGeoLocation(parsedLog.clientIP);
-        if (geoData) {
-          parsedLog.country = geoData.country;
-          parsedLog.city = geoData.city;
-          parsedLog.countryCode = geoData.countryCode;
-          parsedLog.lat = geoData.lat;
-          parsedLog.lon = geoData.lon;
-        }
+      // Convert responseTime from nanoseconds to milliseconds
+      parsedLog.responseTime = parsedLog.responseTime / 1e6;
+
+      const geoData = await getGeoLocation(parsedLog.clientIP);
+      if (geoData) {
+        parsedLog.country = geoData.country;
+        parsedLog.city = geoData.city;
+        parsedLog.countryCode = geoData.countryCode;
       }
 
       this.updateStats(parsedLog);
@@ -98,47 +120,51 @@ export class LogParser extends EventEmitter {
       }
 
     } catch (error) {
-      // It's possible that some lines in the log are not valid JSON.
-      // We'll log the error but continue processing.
-      console.error('Error parsing log line:', error, line);
+      console.error('Error parsing log line:', line, error);
     }
   }
 
   extractIP(clientAddr) {
-    const match = clientAddr.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
-    return match ? match[1] : clientAddr;
+    if (!clientAddr) return 'unknown';
+    return clientAddr.split(':')[0];
   }
 
   updateStats(log) {
     this.stats.totalRequests++;
 
-    const statusGroup = Math.floor(log.status / 100) * 100;
+    const statusGroup = Math.floor(log.status / 100);
     this.stats.statusCodes[log.status] = (this.stats.statusCodes[log.status] || 0) + 1;
 
-    if (statusGroup === 200) this.stats.requests2xx++;
-    else if (statusGroup === 400) this.stats.requests4xx++;
-    else if (statusGroup === 500) this.stats.requests5xx++;
+    if (statusGroup === 2) this.stats.requests2xx++;
+    else if (statusGroup === 4) this.stats.requests4xx++;
+    else if (statusGroup === 5) this.stats.requests5xx++;
 
-    this.stats.services[log.serviceName] = (this.stats.services[log.serviceName] || 0) + 1;
-    this.stats.routers[log.routerName] = (this.stats.routers[log.routerName] || 0) + 1;
+    if (log.serviceName !== 'unknown') {
+      this.stats.services[log.serviceName] = (this.stats.services[log.serviceName] || 0) + 1;
+    }
+    if (log.routerName !== 'unknown') {
+      this.stats.routers[log.routerName] = (this.stats.routers[log.routerName] || 0) + 1;
+    }
     this.stats.methods[log.method] = (this.stats.methods[log.method] || 0) + 1;
-    this.stats.topIPs[log.clientIP] = (this.stats.topIPs[log.clientIP] || 0) + 1;
+    
+    if (log.clientIP !== 'unknown') {
+        this.stats.topIPs[log.clientIP] = (this.stats.topIPs[log.clientIP] || 0) + 1;
+    }
 
     if (log.country) {
       this.stats.countries[log.country] = (this.stats.countries[log.country] || 0) + 1;
     }
 
-    const totalResponseTime = this.logs.reduce((acc, l) => acc + l.responseTime, 0);
-    this.stats.avgResponseTime = this.logs.length > 0 ? totalResponseTime / this.logs.length : 0;
+    const totalResponseTime = this.logs.reduce((acc, l) => acc + l.responseTime, 0) + log.responseTime;
+    this.stats.avgResponseTime = totalResponseTime / (this.logs.length + 1);
 
     const now = Date.now();
     if (now - this.lastTimestamp >= 1000) {
       this.stats.requestsPerSecond = this.requestsInLastSecond;
-      this.requestsInLastSecond = 1;
+      this.requestsInLastSecond = 0;
       this.lastTimestamp = now;
-    } else {
-      this.requestsInLastSecond++;
     }
+    this.requestsInLastSecond++;
   }
 
   async getStats() {
