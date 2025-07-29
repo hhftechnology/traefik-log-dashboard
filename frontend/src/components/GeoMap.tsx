@@ -30,7 +30,7 @@ export function GeoMap({ stats }: GeoMapProps) {
     );
   }
 
-  const countryData = stats.topCountries.reduce((acc, { country, count }) => {
+  const countryData = stats.topCountries.reduce((acc: Record<string, number>, { country, count }) => {
     acc[country] = count;
     return acc;
   }, {});
@@ -49,8 +49,8 @@ export function GeoMap({ stats }: GeoMapProps) {
           <ComposableMap data-tip="">
             <ZoomableGroup>
               <Geographies geography={geoUrl}>
-                {({ geographies }) =>
-                  geographies.map(geo => {
+                {({ geographies }: { geographies: any[] }) =>
+                  geographies.map((geo: any) => {
                     const count = countryData[geo.properties.name] || 0;
                     return (
                       <Geography
