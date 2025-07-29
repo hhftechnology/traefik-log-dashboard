@@ -3,38 +3,6 @@ import { EventEmitter } from 'events';
 import fs from 'fs/promises';
 import { getGeoLocation } from './geoLocation.js';
 
-// A simple queue with a delay to process log lines and avoid API rate limiting.
-class StaggeredQueue {
-  constructor(processFn, delay = 50) {
-    this.queue = [];
-    this.processing = false;
-    this.processFn = processFn;
-    this.delay = delay;
-  }
-
-  add(item) {
-    this.queue.push(item);
-    if (!this.processing) {
-      this.processNext();
-    }
-  }
-
-  async processNext() {
-    if (this.queue.length === 0) {
-      this.processing = false;
-      return;
-    }
-
-    this.processing = true;
-    const item = this.queue.shift();
-    await this.processFn(item);
-
-    // Wait for the delay before processing the next item
-    setTimeout(() => this.processNext(), this.delay);
-  }
-}
-
-
 export class LogParser extends EventEmitter {
   constructor() {
     super();
@@ -57,9 +25,6 @@ export class LogParser extends EventEmitter {
     };
     this.lastTimestamp = Date.now();
     this.requestsInLastSecond = 0;
-    
-    // Initialize the queue to process log lines with a delay of 50ms (~20 req/sec)
-    this.lineQueue = new StaggeredQueue(line => this.parseLine(line, true), 50);
   }
 
   async setLogFile(filePath) {
@@ -67,28 +32,71 @@ export class LogParser extends EventEmitter {
       this.tail.unwatch();
     }
 
-    try {
-      await fs.access(filePath);
-      console.log(`Log file found: ${filePath}. Tailing from the beginning.`);
-    } catch (error) {
-      console.error(`Log file not found, will watch for its creation: ${filePath}`);
-    }
+    // Pre-cache all unique IPs from the log file to avoid rate-limiting during processing.
+    await this.preCacheGeoLocations(filePath);
 
+    // Now that IPs are cached, we can tail the file and process lines quickly.
     this.tail = new Tail(filePath, {
-      fromBeginning: true, // Read the entire file from the start
+      fromBeginning: true,
       follow: true,
       logger: console
     });
 
-    this.tail.on('line', (line) => {
-      // Add each line to the queue instead of processing it immediately
-      this.lineQueue.add(line);
+    this.tail.on('line', async (line) => {
+      await this.parseLine(line, true);
     });
 
     this.tail.on('error', (error) => {
       console.error('Tail error:', error);
       this.emit('error', error);
     });
+  }
+
+  async preCacheGeoLocations(filePath) {
+    console.log('Starting geolocation pre-caching...');
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const lines = content.split('\n').filter(line => line.trim());
+      
+      const ipSet = new Set();
+      // This regex is a bit more robust for finding the ClientAddr
+      const ipRegex = /"ClientAddr":"([^"]+)"/;
+
+      for (const line of lines) {
+        try {
+            const match = line.match(ipRegex);
+            if (match && match[1]) {
+              const ip = this.extractIP(match[1]);
+              if (ip !== 'unknown' && ip !== 'Private Network') {
+                ipSet.add(ip);
+              }
+            }
+        } catch (e) {
+            // Ignore lines that are not valid JSON
+        }
+      }
+
+      const uniqueIPs = Array.from(ipSet);
+      console.log(`Found ${uniqueIPs.length} unique public IP addresses to geolocate.`);
+
+      let count = 0;
+      for (const ip of uniqueIPs) {
+        await getGeoLocation(ip);
+        count++;
+        console.log(`Pre-cached IP ${count} of ${uniqueIPs.length}`);
+        // Wait for 1.5 seconds between each API call to respect the free tier rate limit (45/min).
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+
+      console.log('Finished geolocation pre-caching.');
+
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.error('Error during geo pre-caching:', error);
+      } else {
+        console.log('Log file not found for pre-caching, will proceed with tailing.');
+      }
+    }
   }
 
   async parseLine(line, emit = true) {
@@ -113,6 +121,7 @@ export class LogParser extends EventEmitter {
         countryCode: null
       };
 
+      // This call should now be fast because of pre-caching
       const geoData = await getGeoLocation(parsedLog.clientIP);
       if (geoData) {
         parsedLog.country = geoData.country;
@@ -132,8 +141,8 @@ export class LogParser extends EventEmitter {
       }
 
     } catch (error) {
-      // Log errors for non-JSON lines but don't crash
-      console.error('Could not parse log line as JSON:', line);
+      // It's common for log files to have non-JSON lines, so we'll just log a warning.
+      // console.warn('Could not parse log line as JSON:', line);
     }
   }
 
