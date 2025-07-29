@@ -1,0 +1,39 @@
+services:
+  backend:
+    build: ./backend
+    container_name: traefik-dashboard-backend
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - TRAEFIK_LOG_FILE=/logs/traefik.log
+    volumes:
+      # Mount your Traefik log file or directory here
+      - ${TRAEFIK_LOG_PATH:-./logs}:/logs:ro
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build: ./frontend
+    container_name: traefik-dashboard-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# Optionally, you can add this service to the same network as Traefik
+networks:
+  default:
+    external:
+      name: traefik_network

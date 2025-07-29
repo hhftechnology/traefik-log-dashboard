@@ -1,0 +1,24 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install nodemon globally
+RUN npm install -g nodemon
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy source code
+COPY src ./src
+
+# Create logs directory
+RUN mkdir -p /logs
+
+# Expose port
+EXPOSE 3001
+
+# Run with nodemon for hot reload
+CMD ["nodemon", "src/index.js"]

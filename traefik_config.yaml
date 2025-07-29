@@ -1,0 +1,71 @@
+# Sample Traefik configuration with JSON logging enabled
+api:
+  dashboard: true
+  debug: true
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: traefik-network
+
+# Configure JSON access logs
+accessLog:
+  filePath: "/logs/traefik.log"
+  format: json
+  bufferingSize: 100
+  fields:
+    defaultMode: keep
+    names:
+      ClientUsername: drop
+    headers:
+      defaultMode: keep
+      names:
+        User-Agent: keep
+        Authorization: drop
+        Content-Type: keep
+
+# Log configuration
+log:
+  level: INFO
+  filePath: "/logs/traefik-app.log"
+  format: json
+
+# Certificate resolver for Let's Encrypt
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: your-email@example.com
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+      tlsChallenge: {}
+
+# Middleware definitions
+middlewares:
+  redirect-to-https:
+    redirectScheme:
+      scheme: https
+      permanent: true
+  
+  rate-limit:
+    rateLimit:
+      average: 100
+      burst: 50
+  
+  secure-headers:
+    headers:
+      customFrameOptionsValue: "SAMEORIGIN"
+      contentTypeNosniff: true
+      browserXssFilter: true
+      referrerPolicy: "strict-origin-when-cross-origin"
+      forceSTSHeader: true
+      stsIncludeSubdomains: true
+      stsPreload: true
+      stsSeconds: 31536000
