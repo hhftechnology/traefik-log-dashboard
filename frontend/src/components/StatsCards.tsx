@@ -76,7 +76,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
     },
     {
       title: "Countries",
-      value: Object.keys(stats.countries || {}).length.toString(),
+      value: (stats.topCountries || []).length.toString(),
       icon: Globe,
       description: "Unique locations",
       color: "text-indigo-600",
