@@ -3,11 +3,43 @@ import { EventEmitter } from 'events';
 import fs from 'fs/promises';
 import { getGeoLocation } from './geoLocation.js';
 
+// A simple queue with a delay to process log lines and avoid API rate limiting.
+class StaggeredQueue {
+  constructor(processFn, delay = 50) {
+    this.queue = [];
+    this.processing = false;
+    this.processFn = processFn;
+    this.delay = delay;
+  }
+
+  add(item) {
+    this.queue.push(item);
+    if (!this.processing) {
+      this.processNext();
+    }
+  }
+
+  async processNext() {
+    if (this.queue.length === 0) {
+      this.processing = false;
+      return;
+    }
+
+    this.processing = true;
+    const item = this.queue.shift();
+    await this.processFn(item);
+
+    // Wait for the delay before processing the next item
+    setTimeout(() => this.processNext(), this.delay);
+  }
+}
+
+
 export class LogParser extends EventEmitter {
   constructor() {
     super();
     this.logs = [];
-    this.maxLogs = 10000; // Keep last 10k logs in memory
+    this.maxLogs = 10000;
     this.tail = null;
     this.stats = {
       totalRequests: 0,
@@ -25,6 +57,9 @@ export class LogParser extends EventEmitter {
     };
     this.lastTimestamp = Date.now();
     this.requestsInLastSecond = 0;
+    
+    // Initialize the queue to process log lines with a delay of 50ms (~20 req/sec)
+    this.lineQueue = new StaggeredQueue(line => this.parseLine(line, true), 50);
   }
 
   async setLogFile(filePath) {
@@ -34,49 +69,26 @@ export class LogParser extends EventEmitter {
 
     try {
       await fs.access(filePath);
+      console.log(`Log file found: ${filePath}. Tailing from the beginning.`);
     } catch (error) {
       console.error(`Log file not found, will watch for its creation: ${filePath}`);
     }
 
-    // Process recent history first to populate the dashboard without hitting rate limits
-    await this.processExistingFile(filePath);
-
-    // Now, tail the file for new lines
     this.tail = new Tail(filePath, {
-      fromBeginning: false,
+      fromBeginning: true, // Read the entire file from the start
       follow: true,
       logger: console
     });
 
-    this.tail.on('line', async (line) => {
-      await this.parseLine(line, true);
+    this.tail.on('line', (line) => {
+      // Add each line to the queue instead of processing it immediately
+      this.lineQueue.add(line);
     });
 
     this.tail.on('error', (error) => {
       console.error('Tail error:', error);
       this.emit('error', error);
     });
-  }
-
-  async processExistingFile(filePath) {
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const lines = content.split('\n').filter(line => line.trim());
-      
-      const recentLines = lines.slice(-1000);
-      console.log(`Processing ${recentLines.length} recent log entries...`);
-
-      for (const line of recentLines) {
-        await this.parseLine(line, false); // Don't emit 'newLog' for each historical entry
-        // Stagger the API calls to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 50)); // ~20 req/sec
-      }
-      console.log('Finished processing recent log entries.');
-    } catch (error) {
-      if (error.code !== 'ENOENT') { // Ignore "file not found" as it might be created later
-        console.error('Error processing existing log file:', error);
-      }
-    }
   }
 
   async parseLine(line, emit = true) {
@@ -90,16 +102,16 @@ export class LogParser extends EventEmitter {
         method: log.RequestMethod || 'GET',
         path: log.RequestPath || '',
         status: parseInt(log.DownstreamStatus || 0),
-        responseTime: parseFloat(log.Duration || 0), // Duration is in nanoseconds
+        responseTime: parseFloat(log.Duration || 0) / 1e6, // Convert nanoseconds to ms
         serviceName: log.ServiceName || 'unknown',
         routerName: log.RouterName || 'unknown',
         host: log.RequestHost || '',
         userAgent: log['request_User-Agent'] || '',
         size: parseInt(log.DownstreamContentSize || 0),
+        country: null,
+        city: null,
+        countryCode: null
       };
-
-      // Convert responseTime from nanoseconds to milliseconds
-      parsedLog.responseTime = parsedLog.responseTime / 1e6;
 
       const geoData = await getGeoLocation(parsedLog.clientIP);
       if (geoData) {
@@ -120,7 +132,8 @@ export class LogParser extends EventEmitter {
       }
 
     } catch (error) {
-      console.error('Error parsing log line:', line, error);
+      // Log errors for non-JSON lines but don't crash
+      console.error('Could not parse log line as JSON:', line);
     }
   }
 
@@ -139,15 +152,15 @@ export class LogParser extends EventEmitter {
     else if (statusGroup === 4) this.stats.requests4xx++;
     else if (statusGroup === 5) this.stats.requests5xx++;
 
-    if (log.serviceName !== 'unknown') {
+    if (log.serviceName && log.serviceName !== 'unknown') {
       this.stats.services[log.serviceName] = (this.stats.services[log.serviceName] || 0) + 1;
     }
-    if (log.routerName !== 'unknown') {
+    if (log.routerName && log.routerName !== 'unknown') {
       this.stats.routers[log.routerName] = (this.stats.routers[log.routerName] || 0) + 1;
     }
     this.stats.methods[log.method] = (this.stats.methods[log.method] || 0) + 1;
     
-    if (log.clientIP !== 'unknown') {
+    if (log.clientIP && log.clientIP !== 'unknown') {
         this.stats.topIPs[log.clientIP] = (this.stats.topIPs[log.clientIP] || 0) + 1;
     }
 
