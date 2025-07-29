@@ -169,3 +169,14 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
     </div>
   );
 }
+export function LogTableContainer({ logs, requestLogs }: LogTableProps) {
+  useEffect(() => {
+    requestLogs({ page: 1, limit: 50 });
+  }, [requestLogs]);
+
+  return (
+    <div className="p-4">
+      <LogTable logs={logs} requestLogs={requestLogs} />
+    </div>
+  );
+}
