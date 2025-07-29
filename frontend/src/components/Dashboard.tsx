@@ -17,7 +17,7 @@ export function Dashboard() {
   })) : [];
 
   const serviceData = stats ? Object.entries(stats.services)
-    .sort(([, a], [, b]) => b - a)
+    .sort(([, a]: [string, number], [, b]: [string, number]) => b - a)
     .slice(0, 5)
     .map(([name, count]) => ({
       name,
@@ -61,7 +61,7 @@ export function Dashboard() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                    label={({ name, percent }: { name: string, percent: number }) => `${name} (${(percent * 100).toFixed(0)}%)`}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
@@ -93,7 +93,7 @@ export function Dashboard() {
                   No service data available
                 </div>
               ) : (
-                serviceData.map((service, index) => {
+                serviceData.map((service: { name: string, value: number }, index) => {
                   const percentage = stats ? ((service.value / stats.totalRequests) * 100).toFixed(1) : 0;
                   return (
                     <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
