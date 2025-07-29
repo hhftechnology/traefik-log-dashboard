@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { LogEntry } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
-import { Globe, Clock, Server, Router } from "lucide-react";
+import { Globe, Server, Router } from "lucide-react";
 
 interface LogTableProps {
   logs: LogEntry[];

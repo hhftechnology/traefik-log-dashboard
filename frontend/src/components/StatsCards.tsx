@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, AlertCircle, CheckCircle, Clock, Globe, Server, TrendingUp, Users } from "lucide-react";
+import { Activity, AlertCircle, CheckCircle, Clock, Globe, Server, TrendingUp } from "lucide-react";
 import { Stats } from "@/hooks/useWebSocket";
 
 interface StatsCardsProps {

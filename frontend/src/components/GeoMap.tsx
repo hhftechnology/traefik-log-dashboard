@@ -28,12 +28,12 @@ export function GeoMap({ stats }: GeoMapProps) {
     );
   }
 
-  const chartData = stats.topCountries.slice(0, 10).map(item => ({
+  const chartData = stats.topCountries.slice(0, 10).map((item: { country: string; count: number }) => ({
     country: item.country,
     requests: item.count
   }));
 
-  const totalRequests = stats.topCountries.reduce((sum, item) => sum + item.count, 0);
+  const totalRequests = stats.topCountries.reduce((sum: number, item: { country: string; count: number }) => sum + item.count, 0);
 
   return (
     <Card>
@@ -50,8 +50,8 @@ export function GeoMap({ stats }: GeoMapProps) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis 
-                  dataKey="country" 
+                <XAxis
+                  dataKey="country"
                   angle={-45}
                   textAnchor="end"
                   height={80}
@@ -63,11 +63,11 @@ export function GeoMap({ stats }: GeoMapProps) {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          
+
           <div className="space-y-2">
             <h4 className="text-sm font-semibold">Country Breakdown</h4>
             <div className="grid grid-cols-2 gap-2">
-              {stats.topCountries.slice(0, 8).map((item, index) => {
+              {stats.topCountries.slice(0, 8).map((item: { country: string; count: number }, index: number) => {
                 const percentage = ((item.count / totalRequests) * 100).toFixed(1);
                 return (
                   <div key={index} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
