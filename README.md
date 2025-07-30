@@ -27,7 +27,7 @@ A real-time dashboard for analyzing Traefik logs with IP geolocation, status cod
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/traefik-log-dashboard.git
+   git clone https://github.com/hhftechnology/traefik-log-dashboard.git
    cd traefik-log-dashboard
    ```
 
