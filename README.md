@@ -40,7 +40,7 @@ A real-time dashboard for analyzing Traefik logs with IP geolocation, status cod
 
 3. **Build and run**
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 4. **Access the dashboard**
@@ -191,6 +191,7 @@ Edit `frontend/src/index.css` to customize colors and styling.
 - Rate limits may apply for high-traffic sites
 
 
+## Dev SetUp
 
 ### Step 1: Create all directories
 
@@ -218,8 +219,8 @@ make build
 make up
 
 # Or using Docker Compose directly
-docker-compose build
-docker-compose up -d
+docker compose build
+docker compose up -d
 ```
 
 ## Configuration Options
@@ -270,22 +271,22 @@ accessLog:
 
 ### Basic Deployment
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Development Mode
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
 ### Production Mode
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 ### With Monitoring
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 ```
 
 ## Testing
@@ -314,17 +315,17 @@ curl http://localhost:3000
 
 1. Check log file path:
    ```bash
-   docker-compose exec backend ls -la /logs
+   docker compose exec backend ls -la /logs
    ```
 
 2. Verify log format is JSON:
    ```bash
-   docker-compose exec backend head -n 1 /logs/traefik.log
+   docker compose exec backend head -n 1 /logs/traefik.log
    ```
 
 3. Check backend logs:
    ```bash
-   docker-compose logs backend
+   docker compose logs backend
    ```
 
 ### WebSocket disconnects frequently
@@ -404,7 +405,7 @@ Connect to `ws://localhost:3001` and receive:
 
 For more help, create an issue on GitHub or check the logs:
 ```bash
-docker-compose logs -f --tail=100
+docker compose logs -f --tail=100
 ```
 # Traefik Log Dashboard - Quick Reference
 
@@ -413,26 +414,26 @@ docker-compose logs -f --tail=100
 ```bash
 # Start
 ./setup.sh                    # First time setup
-docker-compose up -d          # Start services
+docker compose up -d          # Start services
 make up                       # Alternative: using Makefile
 
 # Stop
-docker-compose down           # Stop services
+docker compose down           # Stop services
 make down                     # Alternative: using Makefile
 
 # Logs
-docker-compose logs -f        # View all logs
-docker-compose logs backend   # Backend logs only
-docker-compose logs frontend  # Frontend logs only
+docker compose logs -f        # View all logs
+docker compose logs backend   # Backend logs only
+docker compose logs frontend  # Frontend logs only
 
 # Restart
-docker-compose restart        # Restart all services
+docker compose restart        # Restart all services
 make restart                  # Alternative: using Makefile
 
 # Update
 git pull                      # Get latest code
-docker-compose build --no-cache  # Rebuild images
-docker-compose up -d          # Restart with new images
+docker compose build --no-cache  # Rebuild images
+docker compose up -d          # Restart with new images
 ```
 
 ## 🔍 Common Issues & Solutions
@@ -461,19 +462,19 @@ curl http://localhost:3001/api/logs?limit=10 | jq .
 
 ```bash
 # View running containers
-docker-compose ps
+docker compose ps
 
 # Enter backend container
-docker-compose exec backend sh
+docker compose exec backend sh
 
 # Enter frontend container
-docker-compose exec frontend sh
+docker compose exec frontend sh
 
 # View resource usage
 docker stats
 
 # Clean up everything
-docker-compose down -v --rmi all
+docker compose down -v --rmi all
 ```
 
 ## Important Files
