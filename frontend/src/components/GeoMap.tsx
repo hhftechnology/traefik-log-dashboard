@@ -139,8 +139,6 @@ export function GeoMap({ stats }: GeoMapProps) {
                                    countryData[geoCode] || 
                                    { count: 0, code: '' };
                         
-                        const isHovered = hoveredCountry === geo.rsmKey;
-                        
                         return (
                           <Geography
                             key={geo.rsmKey}
