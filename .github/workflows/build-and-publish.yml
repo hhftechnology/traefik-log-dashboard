@@ -82,7 +82,7 @@ jobs:
       - name: Start services
         run: |
           echo "TRAEFIK_LOG_PATH=./logs" > .env
-          docker-compose up -d
+          docker compose up -d
 
       - name: Wait for services
         run: sleep 10
@@ -97,4 +97,4 @@ jobs:
 
       - name: Show logs if failed
         if: failure()
-        run: docker-compose logs
+        run: docker compose logs
