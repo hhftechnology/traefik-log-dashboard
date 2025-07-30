@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { LogEntry } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
-import { Globe, Server, Router } from "lucide-react";
+import { Globe, Server, Router, Network, ExternalLink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 interface LogTableProps {
@@ -89,6 +89,8 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
             <TableHead>Response Time</TableHead>
             <TableHead>Service</TableHead>
             <TableHead>Router</TableHead>
+            <TableHead>Request Addr</TableHead>
+            <TableHead>Request Host</TableHead>
             <TableHead>Client IP</TableHead>
             <TableHead>Location</TableHead>
             <TableHead>Size</TableHead>
@@ -97,7 +99,7 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
         <TableBody>
           {logs.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
                 No logs found. Waiting for incoming requests...
               </TableCell>
             </TableRow>
@@ -139,6 +141,22 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
                       <span className="text-xs">{log.routerName}</span>
                     </div>
                   </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Network className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-xs font-mono max-w-32 truncate" title={log.requestAddr}>
+                        {log.requestAddr || '-'}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-xs font-mono max-w-32 truncate" title={log.requestHost}>
+                        {log.requestHost || '-'}
+                      </span>
+                    </div>
+                  </TableCell>
                   <TableCell className="font-mono text-xs">
                     {log.clientIP}
                   </TableCell>
@@ -160,7 +178,7 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
             })
           )}
           <TableRow ref={loader}>
-            <TableCell colSpan={10} className="text-center text-muted-foreground">
+            <TableCell colSpan={12} className="text-center text-muted-foreground">
               Loading more logs...
             </TableCell>
           </TableRow>

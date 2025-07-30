@@ -134,6 +134,8 @@ export class LogParser extends EventEmitter {
         serviceName: log.ServiceName || 'unknown',
         routerName: log.RouterName || 'unknown',
         host: log.RequestHost || '',
+        requestAddr: log.RequestAddr || '',  // New field
+        requestHost: log.RequestHost || '',  // Explicit field for RequestHost
         userAgent: log['request_User-Agent'] || '',
         size: parseInt(log.DownstreamContentSize || 0),
         country: null,

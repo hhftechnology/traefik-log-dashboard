@@ -11,6 +11,8 @@ export interface LogEntry {
   serviceName: string;
   routerName: string;
   host: string;
+  requestAddr: string;  // New field
+  requestHost: string;  // New field
   userAgent: string;
   size: number;
   country?: string;
