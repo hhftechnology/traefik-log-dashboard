@@ -176,7 +176,7 @@ Edit `frontend/src/index.css` to customize colors and styling.
 
 1. Check Traefik log file path in `.env`
 2. Ensure Traefik is outputting JSON format
-3. Check container logs: `docker-compose logs backend`
+3. Check container logs: `docker compose logs backend`
 
 ### WebSocket connection fails
 
@@ -494,7 +494,7 @@ docker compose down -v --rmi all
 
 ```bash
 # Start dev mode with hot reload
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 # Generate test logs
 node scripts/generate-sample-logs.js logs/traefik.log 100
@@ -507,7 +507,7 @@ node scripts/generate-sample-logs.js logs/traefik.log 0 --continuous
 
 ```bash
 # Start with monitoring
-docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 
 # Access
 # - Prometheus: http://localhost:9090
@@ -515,7 +515,7 @@ docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 ```
 
 ---
-Need help? Check logs first: `docker-compose logs -f`
+Need help? Check logs first: `docker compose logs -f`
 
 ## Contributing
 
