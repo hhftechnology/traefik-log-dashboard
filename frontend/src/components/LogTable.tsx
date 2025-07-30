@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { LogEntry } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
-import { Globe, Server, Router } from "lucide-react";
+import { Globe, Server, Router, Network, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 interface LogTableProps {
@@ -17,8 +17,13 @@ interface LogTableProps {
   requestLogs: (params: { page: number, limit: number }) => void;
 }
 
+type SortColumn = 'method' | 'status' | 'responseTime' | 'serviceName' | 'routerName' | 'requestAddr' | 'requestHost' | 'clientIP' | 'location';
+type SortDirection = 'asc' | 'desc' | null;
+
 export function LogTable({ logs, requestLogs }: LogTableProps) {
   const [page, setPage] = useState(1);
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   const observer = useRef<IntersectionObserver | null>(null);
   const loader = useRef<HTMLTableRowElement | null>(null);
 
@@ -45,6 +50,95 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
       requestLogs({ page, limit: 50 });
     }
   }, [page, requestLogs]);
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      // Cycle through: asc -> desc -> none
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else if (sortDirection === 'desc') {
+        setSortDirection(null);
+        setSortColumn(null);
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIcon = (column: SortColumn) => {
+    if (sortColumn !== column) {
+      return <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />;
+    }
+    if (sortDirection === 'asc') {
+      return <ChevronUp className="h-4 w-4 text-foreground" />;
+    }
+    if (sortDirection === 'desc') {
+      return <ChevronDown className="h-4 w-4 text-foreground" />;
+    }
+    return <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />;
+  };
+
+  const sortedLogs = [...logs].sort((a, b) => {
+    if (!sortColumn || !sortDirection) return 0;
+
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortColumn) {
+      case 'method':
+        aValue = a.method;
+        bValue = b.method;
+        break;
+      case 'status':
+        aValue = a.status;
+        bValue = b.status;
+        break;
+      case 'responseTime':
+        aValue = a.responseTime;
+        bValue = b.responseTime;
+        break;
+      case 'serviceName':
+        aValue = a.serviceName;
+        bValue = b.serviceName;
+        break;
+      case 'routerName':
+        aValue = a.routerName;
+        bValue = b.routerName;
+        break;
+      case 'requestAddr':
+        aValue = a.requestAddr || '';
+        bValue = b.requestAddr || '';
+        break;
+      case 'requestHost':
+        aValue = a.requestHost || '';
+        bValue = b.requestHost || '';
+        break;
+      case 'clientIP':
+        aValue = a.clientIP;
+        bValue = b.clientIP;
+        break;
+      case 'location':
+        aValue = a.country || '';
+        bValue = b.country || '';
+        break;
+      default:
+        return 0;
+    }
+
+    // Handle different data types
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+    }
+
+    // String comparison
+    const aStr = String(aValue).toLowerCase();
+    const bStr = String(bValue).toLowerCase();
+    
+    if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1;
+    if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
 
 
   const getStatusBadgeVariant = (status: number) => {
@@ -83,26 +177,100 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
         <TableHeader>
           <TableRow>
             <TableHead>Time</TableHead>
-            <TableHead>Method</TableHead>
+            <TableHead 
+              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+              onClick={() => handleSort('method')}
+            >
+              <div className="flex items-center gap-1">
+                Method
+                {getSortIcon('method')}
+              </div>
+            </TableHead>
             <TableHead>Path</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Response Time</TableHead>
-            <TableHead>Service</TableHead>
-            <TableHead>Router</TableHead>
-            <TableHead>Client IP</TableHead>
-            <TableHead>Location</TableHead>
+            <TableHead 
+              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+              onClick={() => handleSort('status')}
+            >
+              <div className="flex items-center gap-1">
+                Status
+                {getSortIcon('status')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+              onClick={() => handleSort('responseTime')}
+            >
+              <div className="flex items-center gap-1">
+                Response Time
+                {getSortIcon('responseTime')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+              onClick={() => handleSort('serviceName')}
+            >
+              <div className="flex items-center gap-1">
+                Service
+                {getSortIcon('serviceName')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+              onClick={() => handleSort('routerName')}
+            >
+              <div className="flex items-center gap-1">
+                Router
+                {getSortIcon('routerName')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+              onClick={() => handleSort('requestAddr')}
+            >
+              <div className="flex items-center gap-1">
+                Request Addr
+                {getSortIcon('requestAddr')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+              onClick={() => handleSort('requestHost')}
+            >
+              <div className="flex items-center gap-1">
+                Request Host
+                {getSortIcon('requestHost')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+              onClick={() => handleSort('clientIP')}
+            >
+              <div className="flex items-center gap-1">
+                Client IP
+                {getSortIcon('clientIP')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+              onClick={() => handleSort('location')}
+            >
+              <div className="flex items-center gap-1">
+                Location
+                {getSortIcon('location')}
+              </div>
+            </TableHead>
             <TableHead>Size</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {logs.length === 0 ? (
+          {sortedLogs.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+              <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
                 No logs found. Waiting for incoming requests...
               </TableCell>
             </TableRow>
           ) : (
-            logs.map((log) => {
+            sortedLogs.map((log) => {
               const responseTime = formatResponseTime(log.responseTime);
               return (
                 <TableRow key={log.id}>
@@ -139,6 +307,22 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
                       <span className="text-xs">{log.routerName}</span>
                     </div>
                   </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Network className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-xs font-mono max-w-32 truncate" title={log.requestAddr}>
+                        {log.requestAddr || '-'}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-xs font-mono max-w-32 truncate" title={log.requestHost}>
+                        {log.requestHost || '-'}
+                      </span>
+                    </div>
+                  </TableCell>
                   <TableCell className="font-mono text-xs">
                     {log.clientIP}
                   </TableCell>
@@ -160,7 +344,7 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
             })
           )}
           <TableRow ref={loader}>
-            <TableCell colSpan={10} className="text-center text-muted-foreground">
+            <TableCell colSpan={12} className="text-center text-muted-foreground">
               Loading more logs...
             </TableCell>
           </TableRow>

@@ -21,7 +21,10 @@ export class LogParser extends EventEmitter {
       requests2xx: 0,
       requestsPerSecond: 0,
       topIPs: {},
-      countries: {}
+      countries: {},
+      topRouters: {},
+      topRequestAddrs: {},
+      topRequestHosts: {}
     };
     this.lastTimestamp = Date.now();
     this.requestsInLastSecond = 0;
@@ -134,6 +137,8 @@ export class LogParser extends EventEmitter {
         serviceName: log.ServiceName || 'unknown',
         routerName: log.RouterName || 'unknown',
         host: log.RequestHost || '',
+        requestAddr: log.RequestAddr || '',  // New field
+        requestHost: log.RequestHost || '',  // Explicit field for RequestHost
         userAgent: log['request_User-Agent'] || '',
         size: parseInt(log.DownstreamContentSize || 0),
         country: null,
@@ -197,6 +202,18 @@ export class LogParser extends EventEmitter {
         this.stats.topIPs[log.clientIP] = (this.stats.topIPs[log.clientIP] || 0) + 1;
     }
 
+    if (log.routerName && log.routerName !== 'unknown') {
+      this.stats.topRouters[log.routerName] = (this.stats.topRouters[log.routerName] || 0) + 1;
+    }
+
+    if (log.requestAddr && log.requestAddr !== '') {
+      this.stats.topRequestAddrs[log.requestAddr] = (this.stats.topRequestAddrs[log.requestAddr] || 0) + 1;
+    }
+
+    if (log.requestHost && log.requestHost !== '') {
+      this.stats.topRequestHosts[log.requestHost] = (this.stats.topRequestHosts[log.requestHost] || 0) + 1;
+    }
+
     if (log.country && log.countryCode) {
       const key = `${log.countryCode}|${log.country}`;
       this.stats.countries[key] = (this.stats.countries[key] || 0) + 1;
@@ -228,10 +245,28 @@ export class LogParser extends EventEmitter {
         return { country: name, countryCode: code, count };
       });
 
+    const topRouters = Object.entries(this.stats.topRouters)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([router, count]) => ({ router, count }));
+
+    const topRequestAddrs = Object.entries(this.stats.topRequestAddrs)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([addr, count]) => ({ addr, count }));
+
+    const topRequestHosts = Object.entries(this.stats.topRequestHosts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10)
+      .map(([host, count]) => ({ host, count }));
+
     return {
       ...this.stats,
       topIPs,
       topCountries,
+      topRouters,
+      topRequestAddrs,
+      topRequestHosts,
       avgResponseTime: Math.round(this.stats.avgResponseTime * 100) / 100
     };
   }

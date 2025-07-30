@@ -2,6 +2,7 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { StatsCards } from "./StatsCards";
 import { LogTable } from "./LogTable";
 import { GeoMap } from "./GeoMap";
+import { TopListsCards } from "./TopListsCards";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, AlertCircle, Server } from "lucide-react";
@@ -113,6 +114,8 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <TopListsCards stats={stats} />
 
       <GeoMap stats={stats} />
 

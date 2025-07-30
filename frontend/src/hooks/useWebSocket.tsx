@@ -11,6 +11,8 @@ export interface LogEntry {
   serviceName: string;
   routerName: string;
   host: string;
+  requestAddr: string;  // New field
+  requestHost: string;  // New field
   userAgent: string;
   size: number;
   country?: string;
@@ -33,6 +35,9 @@ export interface Stats {
   requestsPerSecond: number;
   topIPs: Array<{ ip: string; count: number }>;
   topCountries: Array<{ country: string; countryCode: string; count: number }>;
+  topRouters: Array<{ router: string; count: number }>;
+  topRequestAddrs: Array<{ addr: string; count: number }>;
+  topRequestHosts: Array<{ host: string; count: number }>;
 }
 
 interface WebSocketMessage {
