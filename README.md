@@ -2,20 +2,20 @@
 
 A real-time dashboard for analyzing Traefik logs with IP geolocation, status code analysis, and service metrics. Built with React (Shadcn UI) and Node.js.
 
-![Dashboard Preview](dashboard-preview.png)
+![Dashboard Preview](scripts/dashboard.png)
 
 ## Features
 
-- 📊 **Real-time Log Monitoring**: Live updates via WebSocket
-- 🌍 **IP Geolocation**: Track requests by country and city
-- 📈 **Comprehensive Analytics**: 
+- **Real-time Log Monitoring**: Live updates via WebSocket
+- **IP Geolocation**: Track requests by country and city
+- **Comprehensive Analytics**: 
   - Request rate and response times
   - Status code distribution
   - Service and router statistics
   - Error rate monitoring
-- 🎨 **Modern UI**: Built with Shadcn UI components
-- 🐳 **Containerized**: Easy deployment with Docker
-- 🔄 **Auto-refresh**: Stats update every 5 seconds
+- **Modern UI**: Built with Shadcn UI components
+- **Containerized**: Easy deployment with Docker
+- **Auto-refresh**: Stats update every 5 seconds
 
 ## Prerequisites
 
@@ -190,114 +190,7 @@ Edit `frontend/src/index.css` to customize colors and styling.
 - Private IPs show as "Private Network"
 - Rate limits may apply for high-traffic sites
 
-## Security Notes
 
-- Log files are mounted read-only
-- No authentication is included (add reverse proxy with auth for production)
-- Consider IP anonymization for GDPR compliance
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Acknowledgments
-
-- Built with [Shadcn UI](https://ui.shadcn.com/)
-- IP Geolocation by [ip-api.com](http://ip-api.com/)
-- Icons by [Lucide](https://lucide.dev/)
-
-# Complete Traefik Log Dashboard Setup Guide
-
-## 🚀 Quick Start (5 minutes)
-
-```bash
-# 1. Clone or create the project
-git clone https://github.com/yourusername/traefik-log-dashboard.git
-cd traefik-log-dashboard
-
-# 2. Make setup script executable
-chmod +x setup.sh
-
-# 3. Run setup
-./setup.sh
-
-# 4. Access dashboard
-open http://localhost:3000
-```
-
-## 📁 Complete File Structure
-
-```
-traefik-log-dashboard/
-├── backend/
-│   ├── src/
-│   │   ├── index.js         # Main backend server
-│   │   ├── logParser.js     # Log parsing logic
-│   │   ├── geoLocation.js   # IP geolocation
-│   │   └── websocket.js     # WebSocket handler
-│   ├── package.json
-│   ├── Dockerfile
-│   └── Dockerfile.dev
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── LogTable.tsx
-│   │   │   ├── StatsCards.tsx
-│   │   │   ├── GeoMap.tsx
-│   │   │   └── ui/
-│   │   │       ├── badge.tsx
-│   │   │       ├── card.tsx
-│   │   │       └── table.tsx
-│   │   ├── hooks/
-│   │   │   └── useWebSocket.ts
-│   │   ├── lib/
-│   │   │   └── utils.ts
-│   │   ├── App.tsx
-│   │   ├── main.tsx
-│   │   └── index.css
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── tsconfig.node.json
-│   ├── vite.config.ts
-│   ├── tailwind.config.js
-│   ├── postcss.config.js
-│   ├── components.json
-│   ├── index.html
-│   ├── nginx.conf
-│   ├── Dockerfile
-│   └── Dockerfile.dev
-├── monitoring/
-│   ├── prometheus.yml
-│   └── grafana/
-├── scripts/
-│   └── generate-sample-logs.js
-├── .github/
-│   └── workflows/
-│       └── build-and-push.yml
-├── docker-compose.yml
-├── docker-compose.dev.yml
-├── docker-compose.prod.yml
-├── docker-compose.monitoring.yml
-├── Makefile
-├── setup.sh
-├── .env.example
-├── .gitignore
-├── traefik-sample.yml
-├── README.md
-├── DEPLOYMENT.md
-└── COMPLETE_SETUP_GUIDE.md
-```
-
-## 🛠️ Manual Setup (if setup.sh doesn't work)
 
 ### Step 1: Create all directories
 
@@ -329,7 +222,7 @@ docker-compose build
 docker-compose up -d
 ```
 
-## 🔧 Configuration Options
+## Configuration Options
 
 ### Environment Variables
 
@@ -351,7 +244,7 @@ accessLog:
   format: json
 ```
 
-## 📊 Features Overview
+## Features Overview
 
 ### Real-time Monitoring
 - Live log streaming via WebSocket
@@ -373,7 +266,7 @@ accessLog:
 - Response time color coding
 - Request method badges
 
-## 🐳 Docker Deployment Options
+## Docker Deployment Options
 
 ### Basic Deployment
 ```bash
@@ -395,7 +288,7 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 ```
 
-## 🧪 Testing
+## Testing
 
 ### Generate Sample Logs
 ```bash
@@ -415,7 +308,7 @@ curl http://localhost:3001/health
 curl http://localhost:3000
 ```
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Dashboard shows "No logs found"
 
@@ -446,7 +339,7 @@ curl http://localhost:3000
 2. Add memory limits in `docker-compose.prod.yml`
 3. Enable log rotation in Traefik
 
-## 🚀 Production Deployment
+## Production Deployment
 
 ### With SSL/TLS
 
@@ -480,7 +373,7 @@ Access monitoring tools:
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3001 (admin/admin)
 
-## 📚 API Reference
+## API Reference
 
 ### REST Endpoints
 
@@ -508,27 +401,6 @@ Connect to `ws://localhost:3001` and receive:
 - `stats` - Updated statistics
 - `logs` - Batch of logs
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open Pull Request
-
-## 📄 License
-
-MIT License - feel free to use in personal and commercial projects.
-
-## 🙏 Credits
-
-- Built with React + TypeScript
-- UI components from Shadcn UI
-- Charts by Recharts
-- IP geolocation by ip-api.com
-- Icons by Lucide
-
----
 
 For more help, create an issue on GitHub or check the logs:
 ```bash
@@ -536,7 +408,7 @@ docker-compose logs -f --tail=100
 ```
 # Traefik Log Dashboard - Quick Reference
 
-## 🚀 Quick Commands
+## Quick Commands
 
 ```bash
 # Start
@@ -585,7 +457,7 @@ curl http://localhost:3001/api/stats | jq .
 curl http://localhost:3001/api/logs?limit=10 | jq .
 ```
 
-## 🐳 Docker Commands
+## Docker Commands
 
 ```bash
 # View running containers
@@ -604,20 +476,20 @@ docker stats
 docker-compose down -v --rmi all
 ```
 
-## 📁 Important Files
+## Important Files
 
 - `.env` - Configuration
 - `docker-compose.yml` - Service definitions
 - `backend/src/logParser.js` - Log parsing logic
 - `frontend/src/components/Dashboard.tsx` - Main UI
 
-## 🌐 URLs
+## URLs
 
 - Dashboard: http://localhost:3000
 - Backend API: http://localhost:3001
 - Health Check: http://localhost:3001/health
 
-## 🛠️ Development
+## Development
 
 ```bash
 # Start dev mode with hot reload
@@ -630,7 +502,7 @@ node scripts/generate-sample-logs.js logs/traefik.log 100
 node scripts/generate-sample-logs.js logs/traefik.log 0 --continuous
 ```
 
-## 📈 Monitoring (Optional)
+## Monitoring (Optional)
 
 ```bash
 # Start with monitoring
@@ -643,3 +515,25 @@ docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 
 ---
 Need help? Check logs first: `docker-compose logs -f`
+
+## Contributing
+
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open Pull Request
+
+## License
+
+MIT License - feel free to use in personal and commercial projects.
+
+## Credits
+
+- Built with React + TypeScript
+- UI components from Shadcn UI
+- Charts by Recharts
+- IP geolocation by ip-api.com
+- Icons by Lucide
+
+---
