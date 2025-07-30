@@ -3,7 +3,6 @@ import { Globe } from "lucide-react";
 import { Stats } from "@/hooks/useWebSocket";
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
 import { Tooltip as ReactTooltip } from "react-tooltip";
-import { useState } from "react";
 
 interface GeoMapProps {
   stats: Stats | null;
@@ -55,7 +54,6 @@ const countryCodeMap: Record<string, string> = {
 };
 
 export function GeoMap({ stats }: GeoMapProps) {
-  const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
   const hasCountryData = stats && stats.topCountries && stats.topCountries.length > 0;
 
   // Create a map of country names/codes to request counts
@@ -136,14 +134,10 @@ export function GeoMap({ stats }: GeoMapProps) {
                                    countryData[geoCode] || 
                                    { count: 0, code: '' };
                         
-                        const isHovered = hoveredCountry === geo.rsmKey;
-                        
                         return (
                           <Geography
                             key={geo.rsmKey}
                             geography={geo}
-                            onMouseEnter={() => setHoveredCountry(geo.rsmKey)}
-                            onMouseLeave={() => setHoveredCountry(null)}
                             data-tooltip-id="country-tooltip"
                             data-tooltip-content={`${geoName}: ${data.count.toLocaleString()} requests`}
                             style={{
