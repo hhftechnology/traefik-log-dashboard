@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Globe } from "lucide-react";
 import { Stats } from "@/hooks/useWebSocket";
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
@@ -98,7 +98,7 @@ export function GeoMap({ stats }: GeoMapProps) {
           }
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-2">
         <div className="w-full h-[400px]">
           {!stats ? (
              <div className="h-full flex items-center justify-center text-muted-foreground">
@@ -130,7 +130,6 @@ export function GeoMap({ stats }: GeoMapProps) {
                         const geoName = geo.properties.name || geo.properties.NAME;
                         const geoCode = geo.properties.ISO_A2 || geo.properties.ISO_A3;
                         
-                        // Try to find country data by name, mapped name, or code
                         const data = countryData[geoName] || 
                                    countryData[geoCode] || 
                                    { count: 0, code: '' };
@@ -168,43 +167,44 @@ export function GeoMap({ stats }: GeoMapProps) {
                 </ZoomableGroup>
               </ComposableMap>
               <ReactTooltip id="country-tooltip" />
-              
-              {/* Legend */}
-              <div className="mt-4 flex items-center justify-center gap-4 text-sm">
-                <span className="text-muted-foreground">Requests:</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-[#dbeafe]" />
-                  <span>Low</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-[#3b82f6]" />
-                  <span>Medium</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-[#1e40af]" />
-                  <span>High</span>
-                </div>
-              </div>
-
-              {/* Top Countries List */}
-              {stats.topCountries.length > 0 && (
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                  {stats.topCountries.slice(0, 6).map((country, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-2 rounded bg-muted/50">
-                      <span className="flex items-center gap-1">
-                        <span className="font-mono text-xs">{country.countryCode ?? ''}</span>
-                        <span className="text-muted-foreground">-</span>
-                        <span className="truncate">{country.country}</span>
-                      </span>
-                      <span className="font-semibold">{country.count.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </>
           )}
         </div>
       </CardContent>
+      {hasCountryData && (
+        <CardFooter className="flex-col items-start gap-y-4">
+          {/* Legend */}
+          <div className="flex w-full items-center justify-center gap-4 text-sm">
+            <span className="text-muted-foreground">Requests:</span>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-[#dbeafe]" />
+              <span>Low</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-[#3b82f6]" />
+              <span>Medium</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-[#1e40af]" />
+              <span>High</span>
+            </div>
+          </div>
+
+          {/* Top Countries List */}
+          <div className="w-full grid grid-cols-2 md:grid-cols-3 gap-2 text-sm pt-4 border-t">
+            {stats.topCountries.slice(0, 6).map((country, idx) => (
+              <div key={idx} className="flex items-center justify-between p-2 rounded bg-muted/50">
+                <span className="flex items-center gap-1">
+                  <span className="font-mono text-xs">{country.countryCode ?? ''}</span>
+                  <span className="text-muted-foreground">-</span>
+                  <span className="truncate">{country.country}</span>
+                </span>
+                <span className="font-semibold">{country.count.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </CardFooter>
+      )}
     </Card>
   );
 }
