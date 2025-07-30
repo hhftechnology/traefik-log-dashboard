@@ -32,7 +32,7 @@ export interface Stats {
   requests2xx: number;
   requestsPerSecond: number;
   topIPs: Array<{ ip: string; count: number }>;
-  topCountries: Array<{ country: string; count: number }>;
+  topCountries: Array<{ country: string; countryCode: string; count: number }>;
 }
 
 interface WebSocketMessage {

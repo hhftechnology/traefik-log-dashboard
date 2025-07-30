@@ -1,9 +1,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Globe } from "lucide-react";
 import { Stats } from "@/hooks/useWebSocket";
-import { ComposableMap, Geographies, Geography, ZoomableGroup, Marker } from "react-simple-maps";
+import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
 import { Tooltip as ReactTooltip } from "react-tooltip";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
 interface GeoMapProps {
   stats: Stats | null;
@@ -136,8 +136,6 @@ export function GeoMap({ stats }: GeoMapProps) {
                                    countryData[geoCode] || 
                                    { count: 0, code: '' };
                         
-                        const isHovered = hoveredCountry === geo.rsmKey;
-                        
                         return (
                           <Geography
                             key={geo.rsmKey}
@@ -197,7 +195,7 @@ export function GeoMap({ stats }: GeoMapProps) {
                   {stats.topCountries.slice(0, 6).map((country, idx) => (
                     <div key={idx} className="flex items-center justify-between p-2 rounded bg-muted/50">
                       <span className="flex items-center gap-1">
-                        <span className="font-mono text-xs">{(country as any).countryCode ?? ''}</span>
+                        <span className="font-mono text-xs">{country.countryCode ?? ''}</span>
                         <span className="text-muted-foreground">-</span>
                         <span className="truncate">{country.country}</span>
                       </span>
