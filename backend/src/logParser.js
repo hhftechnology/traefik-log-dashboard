@@ -55,19 +55,24 @@ export class LogParser extends EventEmitter {
   async preCacheGeoLocations(filePath) {
     console.log('Starting geolocation pre-caching...');
     try {
+      const stats = await fs.stat(filePath);
+      if (!stats.isFile()) {
+        console.log('Log path is a directory, skipping pre-caching');
+        return;
+      }
+
       const content = await fs.readFile(filePath, 'utf-8');
       const lines = content.split('\n').filter(line => line.trim());
       
       const ipSet = new Set();
-      // This regex is a bit more robust for finding the ClientAddr
       const ipRegex = /"ClientAddr":"([^"]+)"/;
 
-      for (const line of lines) {
+      for (const line of lines.slice(-1000)) { // Only process last 1000 lines for pre-caching
         try {
             const match = line.match(ipRegex);
             if (match && match[1]) {
               const ip = this.extractIP(match[1]);
-              if (ip !== 'unknown' && ip !== 'Private Network') {
+              if (ip !== 'unknown' && !this.isPrivateIP(ip)) {
                 ipSet.add(ip);
               }
             }
@@ -79,13 +84,17 @@ export class LogParser extends EventEmitter {
       const uniqueIPs = Array.from(ipSet);
       console.log(`Found ${uniqueIPs.length} unique public IP addresses to geolocate.`);
 
-      let count = 0;
-      for (const ip of uniqueIPs) {
-        await getGeoLocation(ip);
-        count++;
-        console.log(`Pre-cached IP ${count} of ${uniqueIPs.length}`);
-        // Wait for 1.5 seconds between each API call to respect the free tier rate limit (45/min).
-        await new Promise(resolve => setTimeout(resolve, 1500));
+      // Batch process IPs to respect rate limits
+      const batchSize = 40; // Stay under 45/min rate limit
+      for (let i = 0; i < uniqueIPs.length; i += batchSize) {
+        const batch = uniqueIPs.slice(i, i + batchSize);
+        await Promise.all(batch.map(ip => getGeoLocation(ip)));
+        console.log(`Pre-cached ${Math.min(i + batchSize, uniqueIPs.length)} of ${uniqueIPs.length} IPs`);
+        
+        // Wait 60 seconds between batches to respect rate limit
+        if (i + batchSize < uniqueIPs.length) {
+          await new Promise(resolve => setTimeout(resolve, 60000));
+        }
       }
 
       console.log('Finished geolocation pre-caching.');
@@ -97,6 +106,17 @@ export class LogParser extends EventEmitter {
         console.log('Log file not found for pre-caching, will proceed with tailing.');
       }
     }
+  }
+
+  isPrivateIP(ip) {
+    const parts = ip.split('.');
+    return (
+      ip === '127.0.0.1' ||
+      ip === 'localhost' ||
+      (parts[0] === '10') ||
+      (parts[0] === '172' && parseInt(parts[1]) >= 16 && parseInt(parts[1]) <= 31) ||
+      (parts[0] === '192' && parts[1] === '168')
+    );
   }
 
   async parseLine(line, emit = true) {
@@ -118,7 +138,9 @@ export class LogParser extends EventEmitter {
         size: parseInt(log.DownstreamContentSize || 0),
         country: null,
         city: null,
-        countryCode: null
+        countryCode: null,
+        lat: null,
+        lon: null
       };
 
       // This call should now be fast because of pre-caching
@@ -127,6 +149,8 @@ export class LogParser extends EventEmitter {
         parsedLog.country = geoData.country;
         parsedLog.city = geoData.city;
         parsedLog.countryCode = geoData.countryCode;
+        parsedLog.lat = geoData.lat;
+        parsedLog.lon = geoData.lon;
       }
 
       this.updateStats(parsedLog);
@@ -173,8 +197,9 @@ export class LogParser extends EventEmitter {
         this.stats.topIPs[log.clientIP] = (this.stats.topIPs[log.clientIP] || 0) + 1;
     }
 
-    if (log.country) {
-      this.stats.countries[log.country] = (this.stats.countries[log.country] || 0) + 1;
+    if (log.country && log.countryCode) {
+      const key = `${log.countryCode}|${log.country}`;
+      this.stats.countries[key] = (this.stats.countries[key] || 0) + 1;
     }
 
     const totalResponseTime = this.logs.reduce((acc, l) => acc + l.responseTime, 0) + log.responseTime;
@@ -197,8 +222,11 @@ export class LogParser extends EventEmitter {
 
     const topCountries = Object.entries(this.stats.countries)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 10)
-      .map(([country, count]) => ({ country, count }));
+      .slice(0, 20)
+      .map(([key, count]) => {
+        const [code, name] = key.split('|');
+        return { country: name, countryCode: code, count };
+      });
 
     return {
       ...this.stats,
@@ -243,7 +271,10 @@ export class LogParser extends EventEmitter {
 
   async getGeoStats() {
     const countries = Object.entries(this.stats.countries)
-      .map(([country, count]) => ({ country, count }))
+      .map(([key, count]) => {
+        const [code, name] = key.split('|');
+        return { country: name, countryCode: code, count };
+      })
       .sort((a, b) => b.count - a.count);
 
     return { countries };
