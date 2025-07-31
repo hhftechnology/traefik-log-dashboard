@@ -39,11 +39,16 @@ app.get('/api/stats', async (req, res) => {
 
 app.get('/api/logs', async (req, res) => {
   try {
-    const { page = 1, limit = 100, service, status, router } = req.query;
+    const { page = 1, limit = 100, service, status, router, hideUnknown } = req.query;
     const logs = await logParser.getLogs({
       page: parseInt(page),
       limit: parseInt(limit),
-      filters: { service, status, router }
+      filters: { 
+        service, 
+        status, 
+        router,
+        hideUnknown: hideUnknown === 'true'
+      }
     });
     res.json(logs);
   } catch (error) {

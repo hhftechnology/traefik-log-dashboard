@@ -1,4 +1,14 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -9,8 +19,9 @@ import {
 } from "@/components/ui/table";
 import { LogEntry } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
-import { Globe, Server, Router, Network, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Globe, Server, Router, Network, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 
 interface LogTableProps {
   logs: LogEntry[];
@@ -20,40 +31,50 @@ interface LogTableProps {
 type SortColumn = 'method' | 'status' | 'responseTime' | 'serviceName' | 'routerName' | 'requestAddr' | 'requestHost' | 'clientIP' | 'location';
 type SortDirection = 'asc' | 'desc' | null;
 
-export function LogTable({ logs, requestLogs }: LogTableProps) {
-  const [page, setPage] = useState(1);
+export function LogTable({ logs: initialLogs, requestLogs }: LogTableProps) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalLogs, setTotalLogs] = useState(0);
+  const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
+  const [loading, setLoading] = useState(false);
+  const [hideUnknown, setHideUnknown] = useState(false);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
-  const observer = useRef<IntersectionObserver | null>(null);
-  const loader = useRef<HTMLTableRowElement | null>(null);
 
-  useEffect(() => {
-    if (observer.current) observer.current.disconnect();
-
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting) {
-        setPage(prevPage => prevPage + 1);
-      }
-    });
-
-    if (loader.current) {
-      observer.current.observe(loader.current);
+  // Fetch logs from API
+  const fetchLogs = async (page: number, limit: number) => {
+    setLoading(true);
+    try {
+      const response = await axios.get('/api/logs', {
+        params: {
+          page,
+          limit,
+          hideUnknown
+        }
+      });
+      setLogs(response.data.logs);
+      setTotalPages(response.data.totalPages);
+      setTotalLogs(response.data.total);
+    } catch (error) {
+      console.error('Error fetching logs:', error);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    return () => {
-      if (observer.current) observer.current.disconnect();
-    };
-  }, [logs]);
-
+  // Fetch logs when page, pageSize, or hideUnknown changes
   useEffect(() => {
-    if (page > 1) {
-      requestLogs({ page, limit: 50 });
-    }
-  }, [page, requestLogs]);
+    fetchLogs(currentPage, pageSize);
+  }, [currentPage, pageSize, hideUnknown]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [hideUnknown, pageSize]);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
-      // Cycle through: asc -> desc -> none
       if (sortDirection === 'asc') {
         setSortDirection('desc');
       } else if (sortDirection === 'desc') {
@@ -126,12 +147,10 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
         return 0;
     }
 
-    // Handle different data types
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
     }
 
-    // String comparison
     const aStr = String(aValue).toLowerCase();
     const bStr = String(bValue).toLowerCase();
     
@@ -139,7 +158,6 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
     if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1;
     return 0;
   });
-
 
   const getStatusBadgeVariant = (status: number) => {
     if (status >= 200 && status < 300) return "success";
@@ -171,185 +189,320 @@ export function LogTable({ logs, requestLogs }: LogTableProps) {
     return { value: (time / 1000).toFixed(2), unit: "s", color: "text-red-600" };
   };
 
+  // Calculate page range for pagination display
+  const getPageRange = () => {
+    const delta = 2;
+    const range = [];
+    const rangeWithDots = [];
+    let l;
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= currentPage - delta && i <= currentPage + delta)) {
+        range.push(i);
+      }
+    }
+
+    range.forEach((i) => {
+      if (l) {
+        if (i - l === 2) {
+          rangeWithDots.push(l + 1);
+        } else if (i - l !== 1) {
+          rangeWithDots.push('...');
+        }
+      }
+      rangeWithDots.push(i);
+      l = i;
+    });
+
+    return rangeWithDots;
+  };
+
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Time</TableHead>
-            <TableHead 
-              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-              onClick={() => handleSort('method')}
+    <div className="space-y-4">
+      {/* Controls */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="hide-unknown" 
+              checked={hideUnknown}
+              onCheckedChange={(checked) => setHideUnknown(checked as boolean)}
+            />
+            <Label 
+              htmlFor="hide-unknown" 
+              className="text-sm font-normal cursor-pointer"
             >
-              <div className="flex items-center gap-1">
-                Method
-                {getSortIcon('method')}
-              </div>
-            </TableHead>
-            <TableHead>Path</TableHead>
-            <TableHead 
-              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-              onClick={() => handleSort('status')}
-            >
-              <div className="flex items-center gap-1">
-                Status
-                {getSortIcon('status')}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-              onClick={() => handleSort('responseTime')}
-            >
-              <div className="flex items-center gap-1">
-                Response Time
-                {getSortIcon('responseTime')}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-              onClick={() => handleSort('serviceName')}
-            >
-              <div className="flex items-center gap-1">
-                Service
-                {getSortIcon('serviceName')}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-              onClick={() => handleSort('routerName')}
-            >
-              <div className="flex items-center gap-1">
-                Router
-                {getSortIcon('routerName')}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-              onClick={() => handleSort('requestAddr')}
-            >
-              <div className="flex items-center gap-1">
-                Request Addr
-                {getSortIcon('requestAddr')}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-              onClick={() => handleSort('requestHost')}
-            >
-              <div className="flex items-center gap-1">
-                Request Host
-                {getSortIcon('requestHost')}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-              onClick={() => handleSort('clientIP')}
-            >
-              <div className="flex items-center gap-1">
-                Client IP
-                {getSortIcon('clientIP')}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-              onClick={() => handleSort('location')}
-            >
-              <div className="flex items-center gap-1">
-                Location
-                {getSortIcon('location')}
-              </div>
-            </TableHead>
-            <TableHead>Size</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedLogs.length === 0 ? (
+              Hide entries with unknown service/router
+            </Label>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Show</span>
+            <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(parseInt(value))}>
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+                <SelectItem value="150">150</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-muted-foreground">entries</span>
+          </div>
+          
+          <div className="text-sm text-muted-foreground">
+            Showing {Math.min((currentPage - 1) * pageSize + 1, totalLogs)} to {Math.min(currentPage * pageSize, totalLogs)} of {totalLogs} entries
+          </div>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
             <TableRow>
-              <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
-                No logs found. Waiting for incoming requests...
-              </TableCell>
+              <TableHead>Time</TableHead>
+              <TableHead 
+                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                onClick={() => handleSort('method')}
+              >
+                <div className="flex items-center gap-1">
+                  Method
+                  {getSortIcon('method')}
+                </div>
+              </TableHead>
+              <TableHead>Path</TableHead>
+              <TableHead 
+                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                onClick={() => handleSort('status')}
+              >
+                <div className="flex items-center gap-1">
+                  Status
+                  {getSortIcon('status')}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                onClick={() => handleSort('responseTime')}
+              >
+                <div className="flex items-center gap-1">
+                  Response Time
+                  {getSortIcon('responseTime')}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                onClick={() => handleSort('serviceName')}
+              >
+                <div className="flex items-center gap-1">
+                  Service
+                  {getSortIcon('serviceName')}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                onClick={() => handleSort('routerName')}
+              >
+                <div className="flex items-center gap-1">
+                  Router
+                  {getSortIcon('routerName')}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                onClick={() => handleSort('requestAddr')}
+              >
+                <div className="flex items-center gap-1">
+                  Request Addr
+                  {getSortIcon('requestAddr')}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                onClick={() => handleSort('requestHost')}
+              >
+                <div className="flex items-center gap-1">
+                  Request Host
+                  {getSortIcon('requestHost')}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                onClick={() => handleSort('clientIP')}
+              >
+                <div className="flex items-center gap-1">
+                  Client IP
+                  {getSortIcon('clientIP')}
+                </div>
+              </TableHead>
+              <TableHead 
+                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                onClick={() => handleSort('location')}
+              >
+                <div className="flex items-center gap-1">
+                  Location
+                  {getSortIcon('location')}
+                </div>
+              </TableHead>
+              <TableHead>Size</TableHead>
             </TableRow>
-          ) : (
-            sortedLogs.map((log) => {
-              const responseTime = formatResponseTime(log.responseTime);
-              return (
-                <TableRow key={log.id}>
-                  <TableCell className="font-mono text-xs">
-                    {format(new Date(log.timestamp), "HH:mm:ss")}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getMethodBadgeVariant(log.method)}>
-                      {log.method}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate font-mono text-xs">
-                    {log.path}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusBadgeVariant(log.status)}>
-                      {log.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`font-mono text-xs ${responseTime.color}`}>
-                      {responseTime.value}{responseTime.unit}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Server className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-xs">{log.serviceName}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Router className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-xs">{log.routerName}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Network className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-xs font-mono max-w-32 truncate" title={log.requestAddr}>
-                        {log.requestAddr || '-'}
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
+                  Loading logs...
+                </TableCell>
+              </TableRow>
+            ) : sortedLogs.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
+                  No logs found. {hideUnknown && "Try disabling the 'Hide unknown' filter."}
+                </TableCell>
+              </TableRow>
+            ) : (
+              sortedLogs.map((log) => {
+                const responseTime = formatResponseTime(log.responseTime);
+                return (
+                  <TableRow key={log.id}>
+                    <TableCell className="font-mono text-xs">
+                      {format(new Date(log.timestamp), "HH:mm:ss")}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getMethodBadgeVariant(log.method)}>
+                        {log.method}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate font-mono text-xs">
+                      {log.path}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusBadgeVariant(log.status)}>
+                        {log.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`font-mono text-xs ${responseTime.color}`}>
+                        {responseTime.value}{responseTime.unit}
                       </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                      <span className="text-xs font-mono max-w-32 truncate" title={log.requestHost}>
-                        {log.requestHost || '-'}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {log.clientIP}
-                  </TableCell>
-                  <TableCell>
-                    {log.country && (
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-1">
-                        <Globe className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs">
-                          {log.countryCode} - {log.city}
+                        <Server className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-xs">{log.serviceName}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Router className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-xs">{log.routerName}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Network className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-xs font-mono max-w-32 truncate" title={log.requestAddr}>
+                          {log.requestAddr || '-'}
                         </span>
                       </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {(log.size / 1024).toFixed(1)} KB
-                  </TableCell>
-                </TableRow>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-xs font-mono max-w-32 truncate" title={log.requestHost}>
+                          {log.requestHost || '-'}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {log.clientIP}
+                    </TableCell>
+                    <TableCell>
+                      {log.country && (
+                        <div className="flex items-center gap-1">
+                          <Globe className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-xs">
+                            {log.countryCode} - {log.city}
+                          </span>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {(log.size / 1024).toFixed(1)} KB
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          Total {totalLogs} entries
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setCurrentPage(1)}
+            disabled={currentPage === 1 || loading}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1 || loading}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          <div className="flex gap-1">
+            {getPageRange().map((page, index) => {
+              if (page === '...') {
+                return <span key={`dots-${index}`} className="px-2 py-1">...</span>;
+              }
+              return (
+                <Button
+                  key={page}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentPage(page as number)}
+                  disabled={loading}
+                  className="min-w-[40px]"
+                >
+                  {page}
+                </Button>
               );
-            })
-          )}
-          <TableRow ref={loader}>
-            <TableCell colSpan={12} className="text-center text-muted-foreground">
-              Loading more logs...
-            </TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
+            })}
+          </div>
+          
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages || loading}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setCurrentPage(totalPages)}
+            disabled={currentPage === totalPages || loading}
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
