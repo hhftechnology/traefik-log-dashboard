@@ -3,6 +3,7 @@ import { StatsCards } from "./StatsCards";
 import { LogTable } from "./LogTable";
 import { GeoMap } from "./GeoMap";
 import { TopListsCards } from "./TopListsCards";
+import { ThemeToggle } from "./ThemeToggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, AlertCircle, Server } from "lucide-react";
@@ -37,9 +38,12 @@ export function Dashboard() {
     <div className="flex-1 space-y-4 p-8 pt-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Traefik Dashboard</h1>
-        <Badge variant={isConnected ? "success" : "destructive"}>
-          {isConnected ? "Connected" : "Disconnected"}
-        </Badge>
+        <div className="flex items-center gap-4">
+          <ThemeToggle />
+          <Badge variant={isConnected ? "success" : "destructive"}>
+            {isConnected ? "Connected" : "Disconnected"}
+          </Badge>
+        </div>
       </div>
 
       <StatsCards stats={stats} />
