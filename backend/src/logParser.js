@@ -386,6 +386,19 @@ export class LogParser extends EventEmitter {
     const end = start + limit;
     const paginatedLogs = filteredLogs.slice(start, end);
 
+    for (const log of paginatedLogs) {
+      if (!log.country && log.clientIP) {
+        const geoData = await getGeoLocation(log.clientIP);
+        if (geoData) {
+          log.country = geoData.country;
+          log.city = geoData.city;
+          log.countryCode = geoData.countryCode;
+          log.lat = geoData.lat;
+          log.lon = geoData.lon;
+        }
+      }
+    }
+
     return {
       logs: paginatedLogs,
       total: filteredLogs.length,
