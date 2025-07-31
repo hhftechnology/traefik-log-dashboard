@@ -25,13 +25,12 @@ import axios from "axios";
 
 interface LogTableProps {
   logs: LogEntry[];
-  requestLogs: (params: { page: number, limit: number }) => void;
 }
 
 type SortColumn = 'method' | 'status' | 'responseTime' | 'serviceName' | 'routerName' | 'requestAddr' | 'requestHost' | 'clientIP' | 'location';
 type SortDirection = 'asc' | 'desc' | null;
 
-export function LogTable({ logs: initialLogs, requestLogs }: LogTableProps) {
+export function LogTable({ logs: initialLogs }: LogTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
