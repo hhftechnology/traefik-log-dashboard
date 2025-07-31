@@ -214,13 +214,41 @@ export class LogParser extends EventEmitter {
         host: log.RequestHost || '',
         requestAddr: log.RequestAddr || '',
         requestHost: log.RequestHost || '',
-        userAgent: log['request_User-Agent'] || '',
+        userAgent: log.request_UserAgent || '',
         size: parseInt(log.DownstreamContentSize || 0),
         country: null,
         city: null,
         countryCode: null,
         lat: null,
-        lon: null
+        lon: null,
+
+        // New fields
+        StartUTC: log.StartUTC,
+        StartLocal: log.StartLocal,
+        Duration: log.Duration,
+        ServiceURL: log.ServiceURL,
+        ServiceAddr: log.ServiceAddr,
+        ClientHost: log.ClientHost,
+        ClientPort: log.ClientPort,
+        ClientUsername: log.ClientUsername,
+        RequestPort: log.RequestPort,
+        RequestProtocol: log.RequestProtocol,
+        RequestScheme: log.RequestScheme,
+        RequestLine: log.RequestLine,
+        RequestContentSize: log.RequestContentSize,
+        OriginDuration: log.OriginDuration,
+        OriginContentSize: log.OriginContentSize,
+        OriginStatus: log.OriginStatus,
+        DownstreamStatus: log.DownstreamStatus,
+        RequestCount: log.RequestCount,
+        GzipRatio: log.GzipRatio,
+        Overhead: log.Overhead,
+        RetryAttempts: log.RetryAttempts,
+        TLSVersion: log.TLSVersion,
+        TLSCipher: log.TLSCipher,
+        TLSClientSubject: log.TLSClientSubject,
+        TraceId: log.TraceId,
+        SpanId: log.SpanId
       };
 
       const geoData = await getGeoLocation(parsedLog.clientIP);

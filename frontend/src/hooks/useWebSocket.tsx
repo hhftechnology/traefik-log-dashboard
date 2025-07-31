@@ -11,8 +11,8 @@ export interface LogEntry {
   serviceName: string;
   routerName: string;
   host: string;
-  requestAddr: string;  // New field
-  requestHost: string;  // New field
+  requestAddr: string;
+  requestHost: string;
   userAgent: string;
   size: number;
   country?: string;
@@ -20,6 +20,34 @@ export interface LogEntry {
   countryCode?: string;
   lat?: number;
   lon?: number;
+
+  // New Fields
+  StartUTC: string;
+  StartLocal: string;
+  Duration: number;
+  ServiceURL: string;
+  ServiceAddr: string;
+  ClientHost: string;
+  ClientPort: string;
+  ClientUsername: string;
+  RequestPort: string;
+  RequestProtocol: string;
+  RequestScheme: string;
+  RequestLine: string;
+  RequestContentSize: number;
+  OriginDuration: number;
+  OriginContentSize: number;
+  OriginStatus: number;
+  DownstreamStatus: number;
+  RequestCount: number;
+  GzipRatio: number;
+  Overhead: number;
+  RetryAttempts: number;
+  TLSVersion: string;
+  TLSCipher: string;
+  TLSClientSubject: string;
+  TraceId: string;
+  SpanId: string;
 }
 
 export interface Stats {

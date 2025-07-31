@@ -17,17 +17,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { LogEntry } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
-import { Globe, Server, Router, Network, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Globe, Server, Router, Network, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Settings } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 
 interface LogTableProps {
   logs: LogEntry[];
 }
 
-type SortColumn = 'method' | 'status' | 'responseTime' | 'serviceName' | 'routerName' | 'requestAddr' | 'requestHost' | 'clientIP' | 'location';
+type SortColumn = keyof LogEntry;
 type SortDirection = 'asc' | 'desc' | null;
 
 export function LogTable({ logs: initialLogs }: LogTableProps) {
@@ -41,7 +47,107 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>(null);
 
-  // Fetch logs from API
+  // Column visibility state
+  const [columnVisibility, setColumnVisibility] = useState<Record<keyof LogEntry, boolean>>({
+    id: false,
+    timestamp: true,
+    clientIP: true,
+    method: true,
+    path: true,
+    status: true,
+    responseTime: true,
+    serviceName: true,
+    routerName: true,
+    host: false,
+    requestAddr: true,
+    requestHost: true,
+    userAgent: false,
+    size: true,
+    country: true,
+    city: false,
+    countryCode: false,
+    lat: false,
+    lon: false,
+    StartUTC: false,
+    StartLocal: false,
+    Duration: false,
+    ServiceURL: false,
+    ServiceAddr: false,
+    ClientHost: false,
+    ClientPort: false,
+    ClientUsername: false,
+    RequestPort: false,
+    RequestProtocol: false,
+    RequestScheme: false,
+    RequestLine: false,
+    RequestContentSize: false,
+    OriginDuration: false,
+    OriginContentSize: false,
+    OriginStatus: false,
+    DownstreamStatus: false,
+    RequestCount: false,
+    GzipRatio: false,
+    Overhead: false,
+    RetryAttempts: false,
+    TLSVersion: false,
+    TLSCipher: false,
+    TLSClientSubject: false,
+    TraceId: false,
+    SpanId: false,
+  });
+
+  const columnNames: Record<keyof LogEntry, string> = {
+    id: 'ID',
+    timestamp: 'Time',
+    clientIP: 'Client IP',
+    method: 'Method',
+    path: 'Path',
+    status: 'Status',
+    responseTime: 'Response Time',
+    serviceName: 'Service',
+    routerName: 'Router',
+    host: 'Host',
+    requestAddr: 'Request Addr',
+    requestHost: 'Request Host',
+    userAgent: 'User Agent',
+    size: 'Size',
+    country: 'Location',
+    city: 'City',
+    countryCode: 'Country Code',
+    lat: 'Latitude',
+    lon: 'Longitude',
+    StartUTC: 'Start UTC',
+    StartLocal: 'Start Local',
+    Duration: 'Duration (ns)',
+    ServiceURL: 'Service URL',
+    ServiceAddr: 'Service Addr',
+    ClientHost: 'Client Host',
+    ClientPort: 'Client Port',
+    ClientUsername: 'Client Username',
+    RequestPort: 'Request Port',
+    RequestProtocol: 'Request Protocol',
+    RequestScheme: 'Request Scheme',
+    RequestLine: 'Request Line',
+    RequestContentSize: 'Request Content Size',
+    OriginDuration: 'Origin Duration (ns)',
+    OriginContentSize: 'Origin Content Size',
+    OriginStatus: 'Origin Status',
+    DownstreamStatus: 'Downstream Status',
+    RequestCount: 'Request Count',
+    GzipRatio: 'Gzip Ratio',
+    Overhead: 'Overhead (ns)',
+    RetryAttempts: 'Retry Attempts',
+    TLSVersion: 'TLS Version',
+    TLSCipher: 'TLS Cipher',
+    TLSClientSubject: 'TLS Client Subject',
+    TraceId: 'Trace ID',
+    SpanId: 'Span ID',
+  };
+
+  const visibleColumns = useMemo(() => {
+    return (Object.keys(columnVisibility) as Array<keyof LogEntry>).filter(key => columnVisibility[key]);
+  }, [columnVisibility]);
+
   const fetchLogs = async (page: number, limit: number) => {
     setLoading(true);
     try {
@@ -62,12 +168,10 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
     }
   };
 
-  // Fetch logs when page, pageSize, or hideUnknown changes
   useEffect(() => {
     fetchLogs(currentPage, pageSize);
   }, [currentPage, pageSize, hideUnknown]);
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [hideUnknown, pageSize]);
@@ -102,50 +206,9 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
   const sortedLogs = [...logs].sort((a, b) => {
     if (!sortColumn || !sortDirection) return 0;
 
-    let aValue: any;
-    let bValue: any;
-
-    switch (sortColumn) {
-      case 'method':
-        aValue = a.method;
-        bValue = b.method;
-        break;
-      case 'status':
-        aValue = a.status;
-        bValue = b.status;
-        break;
-      case 'responseTime':
-        aValue = a.responseTime;
-        bValue = b.responseTime;
-        break;
-      case 'serviceName':
-        aValue = a.serviceName;
-        bValue = b.serviceName;
-        break;
-      case 'routerName':
-        aValue = a.routerName;
-        bValue = b.routerName;
-        break;
-      case 'requestAddr':
-        aValue = a.requestAddr || '';
-        bValue = b.requestAddr || '';
-        break;
-      case 'requestHost':
-        aValue = a.requestHost || '';
-        bValue = b.requestHost || '';
-        break;
-      case 'clientIP':
-        aValue = a.clientIP;
-        bValue = b.clientIP;
-        break;
-      case 'location':
-        aValue = a.country || '';
-        bValue = b.country || '';
-        break;
-      default:
-        return 0;
-    }
-
+    let aValue = a[sortColumn];
+    let bValue = b[sortColumn];
+    
     if (typeof aValue === 'number' && typeof bValue === 'number') {
       return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
     }
@@ -188,7 +251,6 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
     return { value: (time / 1000).toFixed(2), unit: "s", color: "text-red-600" };
   };
 
-  // Calculate page range for pagination display
   const getPageRange = () => {
     const delta = 2;
     const range: number[] = [];
@@ -216,9 +278,38 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
     return rangeWithDots;
   };
 
+  const renderCellContent = (log: LogEntry, column: keyof LogEntry) => {
+    switch (column) {
+      case 'timestamp':
+        return <span className="font-mono text-xs">{format(new Date(log.timestamp), "HH:mm:ss")}</span>;
+      case 'method':
+        return <Badge variant={getMethodBadgeVariant(log.method)}>{log.method}</Badge>;
+      case 'path':
+        return <span className="max-w-xs truncate font-mono text-xs">{log.path}</span>;
+      case 'status':
+        return <Badge variant={getStatusBadgeVariant(log.status)}>{log.status}</Badge>;
+      case 'responseTime':
+        const responseTime = formatResponseTime(log.responseTime);
+        return <span className={`font-mono text-xs ${responseTime.color}`}>{responseTime.value}{responseTime.unit}</span>;
+      case 'serviceName':
+        return <div className="flex items-center gap-1"><Server className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{log.serviceName}</span></div>;
+      case 'routerName':
+        return <div className="flex items-center gap-1"><Router className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{log.routerName}</span></div>;
+      case 'requestAddr':
+        return <div className="flex items-center gap-1"><Network className="h-3 w-3 text-muted-foreground" /><span className="text-xs font-mono max-w-32 truncate" title={log.requestAddr}>{log.requestAddr || '-'}</span></div>;
+      case 'requestHost':
+        return <div className="flex items-center gap-1"><ExternalLink className="h-3 w-3 text-muted-foreground" /><span className="text-xs font-mono max-w-32 truncate" title={log.requestHost}>{log.requestHost || '-'}</span></div>;
+      case 'country':
+        return log.country ? <div className="flex items-center gap-1"><Globe className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{log.countryCode} - {log.city}</span></div> : null;
+      case 'size':
+        return <span className="text-xs">{(log.size / 1024).toFixed(1)} KB</span>;
+      default:
+        return <span className="text-xs">{String(log[column] ?? '-')}</span>;
+    }
+  };
+  
   return (
     <div className="space-y-4">
-      {/* Controls */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <div className="flex items-center space-x-2">
@@ -237,6 +328,28 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
         </div>
         
         <div className="flex items-center gap-4">
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Settings className="h-4 w-4" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {(Object.keys(columnNames) as Array<keyof LogEntry>).map(key => (
+                <DropdownMenuCheckboxItem
+                  key={key}
+                  checked={columnVisibility[key]}
+                  onCheckedChange={checked =>
+                    setColumnVisibility(prev => ({ ...prev, [key]: checked }))
+                  }
+                >
+                  {columnNames[key]}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Show</span>
             <Select value={pageSize.toString()} onValueChange={(value) => setPageSize(parseInt(value))}>
@@ -258,189 +371,52 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
         </div>
       </div>
 
-      {/* Table */}
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Time</TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-                onClick={() => handleSort('method')}
-              >
-                <div className="flex items-center gap-1">
-                  Method
-                  {getSortIcon('method')}
-                </div>
-              </TableHead>
-              <TableHead>Path</TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-                onClick={() => handleSort('status')}
-              >
-                <div className="flex items-center gap-1">
-                  Status
-                  {getSortIcon('status')}
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-                onClick={() => handleSort('responseTime')}
-              >
-                <div className="flex items-center gap-1">
-                  Response Time
-                  {getSortIcon('responseTime')}
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-                onClick={() => handleSort('serviceName')}
-              >
-                <div className="flex items-center gap-1">
-                  Service
-                  {getSortIcon('serviceName')}
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-                onClick={() => handleSort('routerName')}
-              >
-                <div className="flex items-center gap-1">
-                  Router
-                  {getSortIcon('routerName')}
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-                onClick={() => handleSort('requestAddr')}
-              >
-                <div className="flex items-center gap-1">
-                  Request Addr
-                  {getSortIcon('requestAddr')}
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-                onClick={() => handleSort('requestHost')}
-              >
-                <div className="flex items-center gap-1">
-                  Request Host
-                  {getSortIcon('requestHost')}
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-                onClick={() => handleSort('clientIP')}
-              >
-                <div className="flex items-center gap-1">
-                  Client IP
-                  {getSortIcon('clientIP')}
-                </div>
-              </TableHead>
-              <TableHead 
-                className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-                onClick={() => handleSort('location')}
-              >
-                <div className="flex items-center gap-1">
-                  Location
-                  {getSortIcon('location')}
-                </div>
-              </TableHead>
-              <TableHead>Size</TableHead>
+              {visibleColumns.map(column => (
+                <TableHead 
+                  key={column}
+                  className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
+                  onClick={() => handleSort(column)}
+                >
+                  <div className="flex items-center gap-1">
+                    {columnNames[column]}
+                    {getSortIcon(column)}
+                  </div>
+                </TableHead>
+              ))}
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={visibleColumns.length} className="h-24 text-center text-muted-foreground">
                   Loading logs...
                 </TableCell>
               </TableRow>
             ) : sortedLogs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={visibleColumns.length} className="h-24 text-center text-muted-foreground">
                   No logs found. {hideUnknown && "Try disabling the 'Hide unknown' filter."}
                 </TableCell>
               </TableRow>
             ) : (
-              sortedLogs.map((log) => {
-                const responseTime = formatResponseTime(log.responseTime);
-                return (
-                  <TableRow key={log.id}>
-                    <TableCell className="font-mono text-xs">
-                      {format(new Date(log.timestamp), "HH:mm:ss")}
+              sortedLogs.map((log) => (
+                <TableRow key={log.id}>
+                  {visibleColumns.map(column => (
+                    <TableCell key={column}>
+                      {renderCellContent(log, column)}
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={getMethodBadgeVariant(log.method)}>
-                        {log.method}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-xs truncate font-mono text-xs">
-                      {log.path}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusBadgeVariant(log.status)}>
-                        {log.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`font-mono text-xs ${responseTime.color}`}>
-                        {responseTime.value}{responseTime.unit}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Server className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs">{log.serviceName}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Router className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs">{log.routerName}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Network className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs font-mono max-w-32 truncate" title={log.requestAddr}>
-                          {log.requestAddr || '-'}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs font-mono max-w-32 truncate" title={log.requestHost}>
-                          {log.requestHost || '-'}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {log.clientIP}
-                    </TableCell>
-                    <TableCell>
-                      {log.country && (
-                        <div className="flex items-center gap-1">
-                          <Globe className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-xs">
-                            {log.countryCode} - {log.city}
-                          </span>
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {(log.size / 1024).toFixed(1)} KB
-                    </TableCell>
-                  </TableRow>
-                );
-              })
+                  ))}
+                </TableRow>
+              ))
             )}
           </TableBody>
         </Table>
       </div>
 
-      {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
           Total {totalLogs} entries
