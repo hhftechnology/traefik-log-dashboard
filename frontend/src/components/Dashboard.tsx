@@ -10,7 +10,7 @@ import { Activity, AlertCircle, Server } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
 export function Dashboard() {
-  const { logs, stats, isConnected, requestLogs } = useWebSocket();
+  const { logs, stats, isConnected } = useWebSocket();
 
   const statusCodeData = stats ? Object.entries(stats.statusCodes).map(([code, count]) => ({
     name: code,
@@ -132,7 +132,7 @@ export function Dashboard() {
           <CardDescription>Real-time log entries</CardDescription>
         </CardHeader>
         <CardContent>
-          <LogTable logs={logs} requestLogs={requestLogs} />
+          <LogTable logs={logs} />
         </CardContent>
       </Card>
     </div>
