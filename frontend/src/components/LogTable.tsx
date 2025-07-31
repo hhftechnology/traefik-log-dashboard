@@ -192,9 +192,9 @@ export function LogTable({ logs: initialLogs, requestLogs }: LogTableProps) {
   // Calculate page range for pagination display
   const getPageRange = () => {
     const delta = 2;
-    const range = [];
-    const rangeWithDots = [];
-    let l;
+    const range: number[] = [];
+    const rangeWithDots: (number | string)[] = [];
+    let l: number | undefined;
 
     for (let i = 1; i <= totalPages; i++) {
       if (i === 1 || i === totalPages || (i >= currentPage - delta && i <= currentPage + delta)) {
