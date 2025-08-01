@@ -2,7 +2,8 @@
 
 A real-time dashboard for analyzing Traefik logs with IP geolocation, status code analysis, and service metrics. Built with React (Shadcn UI) and Node.js.
 
-![Dashboard Preview](scripts/dashboard.png)
+![Dashboard Preview-Light](scripts/dashboard-light.png)
+![Dashboard Preview-Dark](scripts/dashboard-dark.png)
 
 ## Features
 
