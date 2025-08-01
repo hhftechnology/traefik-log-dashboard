@@ -6,8 +6,10 @@ import { TopListsCards } from "./TopListsCards";
 import { ThemeToggle } from "./ThemeToggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, AlertCircle, Server } from "lucide-react";
+import { Activity, AlertCircle, Server, Github } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { Footer } from "./Footer";
+import { Button } from "./ui/button";
 
 export function Dashboard() {
   const { logs, stats, isConnected } = useWebSocket();
@@ -39,6 +41,11 @@ export function Dashboard() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Traefik Dashboard</h1>
         <div className="flex items-center gap-4">
+          <a href="https://github.com/hhftechnology" target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="icon">
+              <Github className="h-4 w-4" />
+            </Button>
+          </a>
           <ThemeToggle />
           <Badge variant={isConnected ? "success" : "destructive"}>
             {isConnected ? "Connected" : "Disconnected"}
@@ -135,6 +142,7 @@ export function Dashboard() {
           <LogTable logs={logs} />
         </CardContent>
       </Card>
+      <Footer />
     </div>
   );
 }

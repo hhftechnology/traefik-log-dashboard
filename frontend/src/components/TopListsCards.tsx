@@ -59,6 +59,8 @@ export function TopListsCards({ stats }: TopListsCardsProps) {
       dataKey: "ip"
     }
   ];
+  
+  const chartColors = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"];
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -88,8 +90,7 @@ export function TopListsCards({ stats }: TopListsCardsProps) {
                     return (
                       <div key={itemIndex} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <div className={`w-2 h-2 rounded-full bg-${list.color.split('-')[1]}-${500 - itemIndex * 50}`} 
-                               style={{ backgroundColor: `hsl(${220 - itemIndex * 20}, 70%, ${60 - itemIndex * 5}%)` }} />
+                          <div className={`w-2 h-2 rounded-full ${chartColors[itemIndex % chartColors.length]}`} />
                           <span className="font-mono text-xs truncate" title={value}>
                             {displayValue}
                           </span>

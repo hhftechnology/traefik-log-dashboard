@@ -517,7 +517,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
               return (
                 <Button
                   key={page}
-                  variant={currentPage === page ? "default" : "outline"}
+                  variant={currentPage === page ? "secondary" : "outline"}
                   size="sm"
                   onClick={() => setCurrentPage(page as number)}
                   disabled={loading}
