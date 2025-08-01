@@ -9,7 +9,7 @@ export class LogParser extends EventEmitter {
     super();
     this.logs = [];
     this.maxLogs = 10000;
-    this.tails = [];  // Array to hold multiple tail instances
+    this.tails = [];
     this.stats = {
       totalRequests: 0,
       statusCodes: {},
@@ -29,6 +29,8 @@ export class LogParser extends EventEmitter {
     };
     this.lastTimestamp = Date.now();
     this.requestsInLastSecond = 0;
+    this.geoProcessingQueue = [];
+    this.isProcessingGeo = false;
   }
 
   async setLogFiles(logPaths) {
@@ -46,13 +48,11 @@ export class LogParser extends EventEmitter {
         const stats = await fs.stat(logPath);
         
         if (stats.isDirectory()) {
-          // If it's a directory, find all log files in it
           const files = await this.findLogFiles(logPath);
           for (const file of files) {
             await this.setupTailForFile(file);
           }
         } else if (stats.isFile()) {
-          // If it's a file, tail it directly
           await this.setupTailForFile(logPath);
         }
       } catch (error) {
@@ -60,8 +60,53 @@ export class LogParser extends EventEmitter {
       }
     }
 
-    // Pre-cache geolocation data for all log files
-    await this.preCacheGeoLocationsForAllFiles(paths);
+    // Load all historical logs first
+    await this.loadHistoricalLogs(paths);
+    
+    // Start background geo processing
+    this.startGeoProcessing();
+  }
+
+  async loadHistoricalLogs(paths) {
+    console.log('Loading historical logs...');
+    let totalLines = 0;
+
+    for (const logPath of paths) {
+      try {
+        const stats = await fs.stat(logPath);
+        
+        if (stats.isFile()) {
+          totalLines += await this.loadLogsFromFile(logPath);
+        } else if (stats.isDirectory()) {
+          const files = await this.findLogFiles(logPath);
+          for (const file of files) {
+            totalLines += await this.loadLogsFromFile(file);
+          }
+        }
+      } catch (error) {
+        console.error(`Error loading historical logs from ${logPath}:`, error);
+      }
+    }
+
+    console.log(`Loaded ${totalLines} historical log entries`);
+    console.log(`Found ${Object.keys(this.stats.topIPs).length} unique IPs`);
+  }
+
+  async loadLogsFromFile(filePath) {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const lines = content.split('\n').filter(line => line.trim());
+      
+      // Process ALL lines, not just the last 1000
+      for (const line of lines) {
+        await this.parseLine(line, false); // Don't emit events during initial load
+      }
+      
+      return lines.length;
+    } catch (error) {
+      console.error(`Error loading logs from ${filePath}:`, error);
+      return 0;
+    }
   }
 
   async findLogFiles(dirPath) {
@@ -89,7 +134,7 @@ export class LogParser extends EventEmitter {
       console.log(`Setting up tail for file: ${filePath}`);
       
       const tail = new Tail(filePath, {
-        fromBeginning: true,
+        fromBeginning: false, // Don't re-read from beginning since we loaded historical
         follow: true,
         logger: console
       });
@@ -109,82 +154,16 @@ export class LogParser extends EventEmitter {
     }
   }
 
-  async preCacheGeoLocationsForAllFiles(paths) {
-    console.log('Starting geolocation pre-caching for all files...');
-    const ipSet = new Set();
-    const ipRegex = /"ClientAddr":"([^"]+)"/;
-
-    for (const logPath of paths) {
-      try {
-        const stats = await fs.stat(logPath);
-        
-        if (stats.isFile()) {
-          await this.extractIPsFromFile(logPath, ipSet, ipRegex);
-        } else if (stats.isDirectory()) {
-          const files = await this.findLogFiles(logPath);
-          for (const file of files) {
-            await this.extractIPsFromFile(file, ipSet, ipRegex);
-          }
-        }
-      } catch (error) {
-        console.error(`Error processing path ${logPath} for IP extraction:`, error);
-      }
-    }
-
-    const uniqueIPs = Array.from(ipSet);
-    console.log(`Found ${uniqueIPs.length} unique public IP addresses to geolocate.`);
-
-    // Batch process IPs to respect rate limits
-    const batchSize = 40;
-    for (let i = 0; i < uniqueIPs.length; i += batchSize) {
-      const batch = uniqueIPs.slice(i, i + batchSize);
-      await Promise.all(batch.map(ip => getGeoLocation(ip)));
-      console.log(`Pre-cached ${Math.min(i + batchSize, uniqueIPs.length)} of ${uniqueIPs.length} IPs`);
-      
-      if (i + batchSize < uniqueIPs.length) {
-        await new Promise(resolve => setTimeout(resolve, 70000));
-      }
-    }
-
-    console.log('Finished geolocation pre-caching.');
-  }
-
-  async extractIPsFromFile(filePath, ipSet, ipRegex) {
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const lines = content.split('\n').filter(line => line.trim());
-      
-      // Only process last 1000 lines for pre-caching
-      for (const line of lines.slice(-1000)) {
-        try {
-          const match = line.match(ipRegex);
-          if (match && match[1]) {
-            const ip = this.extractIP(match[1]);
-            if (ip !== 'unknown' && !this.isPrivateIP(ip)) {
-              ipSet.add(ip);
-            }
-          }
-        } catch (e) {
-          // Ignore lines that are not valid JSON
-        }
-      }
-    } catch (error) {
-      console.error(`Error reading file ${filePath} for IP extraction:`, error);
-    }
-  }
-
   async setLogFile(filePath) {
-    // Backward compatibility - convert single path to array
     return this.setLogFiles([filePath]);
   }
 
-  async preCacheGeoLocations(filePath) {
-    // This method is kept for backward compatibility
-    // The new implementation handles this in setLogFiles
-  }
-
   isPrivateIP(ip) {
+    if (!ip || ip === 'unknown') return true;
+    
     const parts = ip.split('.');
+    if (parts.length !== 4) return false;
+    
     return (
       ip === '127.0.0.1' ||
       ip === 'localhost' ||
@@ -193,7 +172,7 @@ export class LogParser extends EventEmitter {
       (parts[0] === '10') ||
       (parts[0] === '172' && parseInt(parts[1]) >= 16 && parseInt(parts[1]) <= 31) ||
       (parts[0] === '192' && parts[1] === '168') ||
-      (parts[0] === '169' && parts[1] === '254') // Link-local
+      (parts[0] === '169' && parts[1] === '254')
     );
   }
 
@@ -276,13 +255,9 @@ export class LogParser extends EventEmitter {
         "request_X-Real-Ip": log["request_X-Real-Ip"],
       };
 
-      const geoData = await getGeoLocation(parsedLog.clientIP);
-      if (geoData) {
-        parsedLog.country = geoData.country;
-        parsedLog.city = geoData.city;
-        parsedLog.countryCode = geoData.countryCode;
-        parsedLog.lat = geoData.lat;
-        parsedLog.lon = geoData.lon;
+     // Add to geo processing queue if IP is public and not yet processed
+      if (parsedLog.clientIP !== 'unknown' && !this.isPrivateIP(parsedLog.clientIP)) {
+        this.geoProcessingQueue.push(parsedLog);
       }
 
       this.updateStats(parsedLog);
@@ -297,30 +272,64 @@ export class LogParser extends EventEmitter {
       }
 
     } catch (error) {
-      // It's common for log files to have non-JSON lines
+      // Ignore non-JSON lines
     }
+  }
+
+  async startGeoProcessing() {
+    if (this.isProcessingGeo) return;
+    
+    this.isProcessingGeo = true;
+    console.log('Starting background geo processing...');
+    
+    while (this.geoProcessingQueue.length > 0) {
+      const batch = this.geoProcessingQueue.splice(0, 40); // Process 40 at a time
+      
+      await Promise.all(batch.map(async (log) => {
+        const geoData = await getGeoLocation(log.clientIP);
+        if (geoData) {
+          log.country = geoData.country;
+          log.city = geoData.city;
+          log.countryCode = geoData.countryCode;
+          log.lat = geoData.lat;
+          log.lon = geoData.lon;
+          
+          // Update country stats
+          if (log.country && log.countryCode) {
+            const key = `${log.countryCode}|${log.country}`;
+            this.stats.countries[key] = (this.stats.countries[key] || 0) + 1;
+          }
+        }
+      }));
+      
+      console.log(`Processed ${batch.length} geo locations. ${this.geoProcessingQueue.length} remaining.`);
+      
+      // Only wait if we have more to process (respecting rate limit)
+      if (this.geoProcessingQueue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 60000)); // 60 seconds between batches
+      }
+    }
+    
+    this.isProcessingGeo = false;
+    console.log('Geo processing complete.');
   }
 
   extractIP(clientAddr) {
     if (!clientAddr) return 'unknown';
     
-    // Handle IPv6 addresses with brackets like [2001:db8::1]:80
     if (clientAddr.startsWith('[')) {
       const match = clientAddr.match(/\[([^\]]+)\]/);
       return match ? match[1] : clientAddr;
     }
     
-    // Handle IPv4 addresses with port like 192.168.1.1:8080
     if (clientAddr.includes('.') && clientAddr.includes(':')) {
       return clientAddr.substring(0, clientAddr.lastIndexOf(':'));
     }
     
-    // Handle plain IPv6 addresses without port
     if (clientAddr.includes(':') && !clientAddr.includes('.')) {
       return clientAddr;
     }
     
-    // Handle plain IPv4 addresses without port
     return clientAddr;
   }
 
@@ -358,6 +367,7 @@ export class LogParser extends EventEmitter {
       this.stats.topRequestHosts[log.requestHost] = (this.stats.topRequestHosts[log.requestHost] || 0) + 1;
     }
 
+    // Update country stats if already geolocated
     if (log.country && log.countryCode) {
       const key = `${log.countryCode}|${log.country}`;
       this.stats.countries[key] = (this.stats.countries[key] || 0) + 1;
@@ -381,9 +391,9 @@ export class LogParser extends EventEmitter {
       .slice(0, 10)
       .map(([ip, count]) => ({ ip, count }));
 
+    // Return ALL countries for the map, not just top 20
     const topCountries = Object.entries(this.stats.countries)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 20)
       .map(([key, count]) => {
         const [code, name] = key.split('|');
         return { country: name, countryCode: code, count };
@@ -411,7 +421,8 @@ export class LogParser extends EventEmitter {
       topRouters,
       topRequestAddrs,
       topRequestHosts,
-      avgResponseTime: Math.round(this.stats.avgResponseTime * 100) / 100
+      avgResponseTime: Math.round(this.stats.avgResponseTime * 100) / 100,
+      geoProcessingRemaining: this.geoProcessingQueue.length
     };
   }
 
@@ -428,7 +439,6 @@ export class LogParser extends EventEmitter {
       filteredLogs = filteredLogs.filter(log => log.routerName === filters.router);
     }
     
-    // Filter out unknown services/routers if requested
     if (filters.hideUnknown) {
       filteredLogs = filteredLogs.filter(log => 
         log.serviceName !== 'unknown' && log.routerName !== 'unknown'
@@ -443,8 +453,9 @@ export class LogParser extends EventEmitter {
     const end = start + limit;
     const paginatedLogs = filteredLogs.slice(start, end);
 
+    // Try to geolocate any logs that don't have location data yet
     for (const log of paginatedLogs) {
-      if (!log.country && log.clientIP) {
+      if (!log.country && log.clientIP && !this.isPrivateIP(log.clientIP)) {
         const geoData = await getGeoLocation(log.clientIP);
         if (geoData) {
           log.country = geoData.country;
@@ -473,6 +484,7 @@ export class LogParser extends EventEmitter {
   }
 
   async getGeoStats() {
+    // Return ALL countries, not filtered
     const countries = Object.entries(this.stats.countries)
       .map(([key, count]) => {
         const [code, name] = key.split('|');
@@ -480,6 +492,10 @@ export class LogParser extends EventEmitter {
       })
       .sort((a, b) => b.count - a.count);
 
-    return { countries };
+    return { 
+      countries,
+      totalCountries: countries.length,
+      geoProcessingRemaining: this.geoProcessingQueue.length 
+    };
   }
 }

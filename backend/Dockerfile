@@ -26,6 +26,8 @@ EXPOSE 3001
 # Set default environment variables
 ENV NODE_ENV=production
 ENV PORT=3001
+# Support multiple log files separated by comma
+# Example: TRAEFIK_LOG_FILE=/logs/traefik.log,/logs/access.log,/logs/
 ENV TRAEFIK_LOG_FILE=/logs/traefik.log
 
 # Run the application
