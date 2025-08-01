@@ -1,7 +1,7 @@
 services:
   backend:
     build: ./backend
-    container_name: traefik-dashboard-backend
+    container_name: ${BACKEND_CONTAINER_NAME:-traefik-dashboard-backend}
     environment:
       - NODE_ENV=production
       - PORT=3001
@@ -20,7 +20,10 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: traefik-dashboard-frontend
+    container_name: ${FRONTEND_CONTAINER_NAME:-traefik-dashboard-frontend}
+    environment:
+      - BACKEND_SERVICE=${BACKEND_SERVICE_NAME:-backend}
+      - BACKEND_PORT=${BACKEND_PORT:-3001}
     ports:
       - "3000:80"
     depends_on:

@@ -3,13 +3,16 @@ import { StatsCards } from "./StatsCards";
 import { LogTable } from "./LogTable";
 import { GeoMap } from "./GeoMap";
 import { TopListsCards } from "./TopListsCards";
+import { ThemeToggle } from "./ThemeToggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, AlertCircle, Server } from "lucide-react";
+import { Activity, AlertCircle, Server, Github } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
+import { Footer } from "./Footer";
+import { Button } from "./ui/button";
 
 export function Dashboard() {
-  const { logs, stats, isConnected, requestLogs } = useWebSocket();
+  const { logs, stats, isConnected } = useWebSocket();
 
   const statusCodeData = stats ? Object.entries(stats.statusCodes).map(([code, count]) => ({
     name: code,
@@ -37,9 +40,17 @@ export function Dashboard() {
     <div className="flex-1 space-y-4 p-8 pt-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Traefik Dashboard</h1>
-        <Badge variant={isConnected ? "success" : "destructive"}>
-          {isConnected ? "Connected" : "Disconnected"}
-        </Badge>
+        <div className="flex items-center gap-4">
+          <a href="https://github.com/hhftechnology" target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="icon">
+              <Github className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </a>
+          <ThemeToggle />
+          <Badge variant={isConnected ? "success" : "destructive"}>
+            {isConnected ? "Connected" : "Disconnected"}
+          </Badge>
+        </div>
       </div>
 
       <StatsCards stats={stats} />
@@ -128,9 +139,10 @@ export function Dashboard() {
           <CardDescription>Real-time log entries</CardDescription>
         </CardHeader>
         <CardContent>
-          <LogTable logs={logs} requestLogs={requestLogs} />
+          <LogTable logs={logs} />
         </CardContent>
       </Card>
+      <Footer />
     </div>
   );
 }

@@ -38,13 +38,13 @@ Set `TRAEFIK_LOG_PATH` to your actual Traefik log location:
 
 ```bash
 # Build and start services
-docker-compose up -d
+docker compose up -d
 
 # Check logs
-docker-compose logs -f
+docker compose logs -f
 
 # Verify services are running
-docker-compose ps
+docker compose ps
 ```
 
 ### 6. Access Dashboard
@@ -57,7 +57,6 @@ Open http://localhost:3000 in your browser.
 
 ```yaml
 # docker-compose.prod.yml
-version: '3.8'
 
 services:
   backend:
@@ -255,8 +254,8 @@ register.registerMetric(httpRequestDuration);
 
 ```bash
 # Check logs
-docker-compose logs backend
-docker-compose logs frontend
+docker compose logs backend
+docker compose logs frontend
 
 # Verify file permissions
 ls -la /path/to/traefik/logs

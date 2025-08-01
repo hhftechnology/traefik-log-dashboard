@@ -6,46 +6,103 @@ A real-time dashboard for analyzing Traefik logs with IP geolocation, status cod
 
 ## Features
 
-- **Real-time Log Monitoring**: Live updates via WebSocket
-- **IP Geolocation**: Track requests by country and city
-- **Comprehensive Analytics**: 
-  - Request rate and response times
-  - Status code distribution
-  - Service and router statistics
-  - Error rate monitoring
-- **Modern UI**: Built with Shadcn UI components
-- **Containerized**: Easy deployment with Docker
-- **Auto-refresh**: Stats update every 5 seconds
+  - **Real-time Log Monitoring**: Live updates via WebSocket.
+  - **IP Geolocation**: Track requests by country and city.
+  - **Comprehensive Analytics**:
+      - Request rate and response times.
+      - Status code distribution.
+      - Service and router statistics.
+      - Error rate monitoring.
+  - **Modern UI**: Built with Shadcn UI components.
+  - **Containerized**: Easy deployment with Docker.
+  - **Auto-refresh**: Stats update every 5 seconds.
+  - **Log Filtering**: Filter out unknown router/service names and private IPs.
+  - **Pagination**: Paginated log table for better performance.
+  - **Configurable Backend Service Name**: No more hardcoded "backend" service name.
+  - **IPv6 Address Support**: Proper handling of IPv6 addresses.
+  - **Multiple Log Paths Support**: Monitor multiple Traefik instances simultaneously.
+
+## New Features in v1.0.3
+
+### 1. Filter Unknown Service/Router Names
+When using Traefik with strict SNI, bot traffic accessing services by IP address results in entries with "unknown" service/router names. You can now filter these out:
+- A checkbox in the log table allows hiding entries with unknown service/router names
+- The filter persists across page changes and is applied server-side for better performance
+
+### 2. Paginated Log Table
+Replaced infinite scroll with traditional pagination:
+- Select between 50, 100, or 150 entries per page
+- Navigate with page numbers, previous/next buttons
+- Shows total entries and current viewing range
+- Much better performance with large log files
+
+### 3. IPv6 Support
+Fixed IPv6 address truncation issue:
+- Properly handles IPv6 addresses with brackets: `[2001:db8::1]:80`
+- Correctly extracts IPv6 addresses without truncating at colons
+- Supports both IPv4 and IPv6 with or without ports
+
+### 4. Configurable Backend Service Name
+The nginx configuration is no longer hardcoded:
+- Set custom backend service name via `BACKEND_SERVICE_NAME` environment variable
+- Useful when running multiple instances or custom Docker network configurations
+- Frontend container automatically uses the configured service name
+
+### 5. Multiple Log Files Support
+Monitor logs from multiple Traefik instances:
+- Comma-separated list of paths in `TRAEFIK_LOG_PATH`
+- Can mix files and directories
+- Automatically discovers `.log` files in directories
+- Aggregates logs from all sources in real-time
 
 ## Prerequisites
 
-- Docker and Docker Compose
-- Traefik configured with JSON logging
-- Access to Traefik log files
+  - Docker and Docker Compose
+  - Traefik configured with JSON logging
+  - Access to Traefik log files
 
 ## Quick Start
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/hhftechnology/traefik-log-dashboard.git
-   cd traefik-log-dashboard
-   ```
+1.  **Clone the repository**
 
-2. **Configure log file path**
-   
-   Create a `.env` file:
-   ```env
-   TRAEFIK_LOG_PATH=/path/to/your/traefik/logs
-   ```
+    ```bash
+    git clone https://github.com/hhftechnology/traefik-log-dashboard.git
+    cd traefik-log-dashboard
+    ```
 
-3. **Build and run**
-   ```bash
-   docker compose up -d
-   ```
+2.  **Configure log file path**
 
-4. **Access the dashboard**
-   
-   Open http://localhost:3000 in your browser
+    Create a `.env` file from the example:
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Update your `.env` file with your custom configurations:
+
+    ```env
+    # Multiple log paths (comma-separated)
+    TRAEFIK_LOG_PATH=/logs/traefik1/,/logs/traefik2/,/var/log/traefik.log
+
+    # Custom backend service name
+    BACKEND_SERVICE_NAME=my-backend
+
+    # Container names
+    BACKEND_CONTAINER_NAME=my-traefik-backend
+    FRONTEND_CONTAINER_NAME=my-traefik-frontend
+    ```
+
+3.  **Build and run**
+
+    ```bash
+    docker compose down
+    docker compose build --no-cache
+    docker compose up -d
+    ```
+
+4.  **Access the dashboard**
+
+    Open http://localhost:3000 in your browser.
 
 ## Configuration
 
@@ -66,32 +123,35 @@ accessLog:
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TRAEFIK_LOG_PATH` | Path to Traefik log file/directory | `./logs` |
-| `PORT` | Backend API port | `3001` |
+| Variable | Description | Default | Example |
+|---|---|---|---|
+| `TRAEFIK_LOG_PATH` | Path to Traefik logs | `/logs` | `/var/log/traefik/access.log` |
+| `PORT` | Backend API port | `3001` | `3001` |
+| `FRONTEND_PORT` | Frontend port | `3000` | `8080` |
+| `NODE_ENV` | Environment | `production` | `development` |
+| `BACKEND_SERVICE_NAME` | Backend service name for Docker networking | `backend` | `my-traefik-backend`|
+| `BACKEND_CONTAINER_NAME` | Backend container name | `traefik-dashboard-backend` | `my-traefik-backend` |
+| `FRONTEND_CONTAINER_NAME`| Frontend container name | `traefik-dashboard-frontend`| `my-traefik-frontend`|
 
 ### Docker Compose Options
 
 The `docker-compose.yml` file supports several deployment scenarios:
 
-1. **Single log file**:
-   ```yaml
-   volumes:
-     - /path/to/traefik.log:/logs/traefik.log:ro
-   ```
-
-2. **Log directory**:
-   ```yaml
-   volumes:
-     - /path/to/log/directory:/logs:ro
-   ```
-
-3. **Named volume** (if using Traefik in Docker):
-   ```yaml
-   volumes:
-     - traefik-logs:/logs:ro
-   ```
+1.  **Single log file**:
+    ```yaml
+    volumes:
+      - /path/to/traefik.log:/logs/traefik.log:ro
+    ```
+2.  **Log directory**:
+    ```yaml
+    volumes:
+      - /path/to/log/directory:/logs:ro
+    ```
+3.  **Named volume** (if using Traefik in Docker):
+    ```yaml
+    volumes:
+      - traefik-logs:/logs:ro
+    ```
 
 ## Architecture
 
@@ -114,13 +174,80 @@ The `docker-compose.yml` file supports several deployment scenarios:
 
 ## API Endpoints
 
-- `GET /api/stats` - Get aggregated statistics
-- `GET /api/logs` - Get paginated logs with filters
-- `GET /api/services` - List all services
-- `GET /api/routers` - List all routers
-- `GET /api/geo-stats` - Geographic statistics
-- `POST /api/set-log-file` - Change log file location
-- `WebSocket /` - Real-time log streaming
+  - `GET /api/stats` - Get aggregated statistics
+  - `GET /api/logs` - Get paginated logs with filters
+  - `GET /api/services` - List all services
+  - `GET /api/routers` - List all routers
+  - `GET /api/geo-stats` - Geographic statistics
+  - `POST /api/set-log-file` - Change log file location
+  - `WebSocket /` - Real-time log streaming
+
+## Development
+
+### Local Development
+
+1.  **Backend**:
+    ```bash
+    cd backend
+    npm install
+    npm run dev
+    ```
+2.  **Frontend**:
+    ```bash
+    cd frontend
+    npm install
+    npm run dev
+    ```
+
+### Building from Source
+
+```bash
+# Build backend
+cd backend
+docker build -t traefik-dashboard-backend .
+
+# Build frontend
+cd frontend
+docker build -t traefik-dashboard-frontend .
+```
+
+## Customization
+
+### Adding Custom Metrics
+
+1.  Edit `backend/src/logParser.js` to extract additional fields
+2.  Update `frontend/src/components/StatsCards.tsx` to display new metrics
+
+### Modifying UI Theme
+
+Edit `frontend/src/index.css` to customize colors and styling.
+
+## Performance Considerations
+
+  - The backend keeps the last 10,000 logs in memory.
+  - IP geolocation results are cached for 24 hours.
+  - Stats are calculated incrementally for efficiency.
+  - WebSocket connections automatically reconnect.
+
+## Troubleshooting
+
+### Dashboard shows "No logs found"
+
+1.  Check Traefik log file path in `.env`.
+2.  Ensure Traefik is outputting JSON format.
+3.  Check container logs: `docker compose logs backend`.
+
+### WebSocket connection fails
+
+1.  Check if backend is running: `curl http://localhost:3001/health`.
+2.  Ensure ports 3000 and 3001 are not in use.
+3.  Check browser console for errors.
+
+### Geolocation not working
+
+  - The dashboard uses ip-api.com (free tier: 45 requests/minute).
+  - Private IPs show as "Private Network".
+  - Rate limits may apply for high-traffic sites.
 
 ## Development
 
@@ -169,27 +296,6 @@ Edit `frontend/src/index.css` to customize colors and styling.
 - IP geolocation results are cached for 24 hours
 - Stats are calculated incrementally for efficiency
 - WebSocket connections automatically reconnect
-
-## Troubleshooting
-
-### Dashboard shows "No logs found"
-
-1. Check Traefik log file path in `.env`
-2. Ensure Traefik is outputting JSON format
-3. Check container logs: `docker compose logs backend`
-
-### WebSocket connection fails
-
-1. Check if backend is running: `curl http://localhost:3001/health`
-2. Ensure ports 3000 and 3001 are not in use
-3. Check browser console for errors
-
-### Geolocation not working
-
-- The dashboard uses ip-api.com (free tier: 45 requests/minute)
-- Private IPs show as "Private Network"
-- Rate limits may apply for high-traffic sites
-
 
 ## Dev SetUp
 

@@ -1,6 +1,7 @@
 import { Tail } from 'tail';
 import { EventEmitter } from 'events';
 import fs from 'fs/promises';
+import path from 'path';
 import { getGeoLocation } from './geoLocation.js';
 
 export class LogParser extends EventEmitter {
@@ -8,7 +9,7 @@ export class LogParser extends EventEmitter {
     super();
     this.logs = [];
     this.maxLogs = 10000;
-    this.tail = null;
+    this.tails = [];
     this.stats = {
       totalRequests: 0,
       statusCodes: {},
@@ -28,97 +29,150 @@ export class LogParser extends EventEmitter {
     };
     this.lastTimestamp = Date.now();
     this.requestsInLastSecond = 0;
+    this.geoProcessingQueue = [];
+    this.isProcessingGeo = false;
   }
 
-  async setLogFile(filePath) {
-    if (this.tail) {
-      this.tail.unwatch();
+  async setLogFiles(logPaths) {
+    // Stop existing tails
+    this.tails.forEach(tail => tail.unwatch());
+    this.tails = [];
+
+    // Handle both single path and array of paths
+    const paths = Array.isArray(logPaths) ? logPaths : [logPaths];
+    
+    console.log(`Setting up monitoring for ${paths.length} log path(s)`);
+
+    for (const logPath of paths) {
+      try {
+        const stats = await fs.stat(logPath);
+        
+        if (stats.isDirectory()) {
+          const files = await this.findLogFiles(logPath);
+          for (const file of files) {
+            await this.setupTailForFile(file);
+          }
+        } else if (stats.isFile()) {
+          await this.setupTailForFile(logPath);
+        }
+      } catch (error) {
+        console.error(`Error accessing log path ${logPath}:`, error);
+      }
     }
 
-    // Pre-cache all unique IPs from the log file to avoid rate-limiting during processing.
-    await this.preCacheGeoLocations(filePath);
-
-    // Now that IPs are cached, we can tail the file and process lines quickly.
-    this.tail = new Tail(filePath, {
-      fromBeginning: true,
-      follow: true,
-      logger: console
-    });
-
-    this.tail.on('line', async (line) => {
-      await this.parseLine(line, true);
-    });
-
-    this.tail.on('error', (error) => {
-      console.error('Tail error:', error);
-      this.emit('error', error);
-    });
+    // Load all historical logs first
+    await this.loadHistoricalLogs(paths);
+    
+    // Start background geo processing
+    this.startGeoProcessing();
   }
 
-  async preCacheGeoLocations(filePath) {
-    console.log('Starting geolocation pre-caching...');
-    try {
-      const stats = await fs.stat(filePath);
-      if (!stats.isFile()) {
-        console.log('Log path is a directory, skipping pre-caching');
-        return;
-      }
+  async loadHistoricalLogs(paths) {
+    console.log('Loading historical logs...');
+    let totalLines = 0;
 
+    for (const logPath of paths) {
+      try {
+        const stats = await fs.stat(logPath);
+        
+        if (stats.isFile()) {
+          totalLines += await this.loadLogsFromFile(logPath);
+        } else if (stats.isDirectory()) {
+          const files = await this.findLogFiles(logPath);
+          for (const file of files) {
+            totalLines += await this.loadLogsFromFile(file);
+          }
+        }
+      } catch (error) {
+        console.error(`Error loading historical logs from ${logPath}:`, error);
+      }
+    }
+
+    console.log(`Loaded ${totalLines} historical log entries`);
+    console.log(`Found ${Object.keys(this.stats.topIPs).length} unique IPs`);
+  }
+
+  async loadLogsFromFile(filePath) {
+    try {
       const content = await fs.readFile(filePath, 'utf-8');
       const lines = content.split('\n').filter(line => line.trim());
       
-      const ipSet = new Set();
-      const ipRegex = /"ClientAddr":"([^"]+)"/;
-
-      for (const line of lines.slice(-1000)) { // Only process last 1000 lines for pre-caching
-        try {
-            const match = line.match(ipRegex);
-            if (match && match[1]) {
-              const ip = this.extractIP(match[1]);
-              if (ip !== 'unknown' && !this.isPrivateIP(ip)) {
-                ipSet.add(ip);
-              }
-            }
-        } catch (e) {
-            // Ignore lines that are not valid JSON
-        }
+      // Process ALL lines, not just the last 1000
+      for (const line of lines) {
+        await this.parseLine(line, false); // Don't emit events during initial load
       }
-
-      const uniqueIPs = Array.from(ipSet);
-      console.log(`Found ${uniqueIPs.length} unique public IP addresses to geolocate.`);
-
-      // Batch process IPs to respect rate limits
-      const batchSize = 40; // Stay under 45/min rate limit
-      for (let i = 0; i < uniqueIPs.length; i += batchSize) {
-        const batch = uniqueIPs.slice(i, i + batchSize);
-        await Promise.all(batch.map(ip => getGeoLocation(ip)));
-        console.log(`Pre-cached ${Math.min(i + batchSize, uniqueIPs.length)} of ${uniqueIPs.length} IPs`);
-        
-        // Wait 60 seconds between batches to respect rate limit
-        if (i + batchSize < uniqueIPs.length) {
-          await new Promise(resolve => setTimeout(resolve, 60000));
-        }
-      }
-
-      console.log('Finished geolocation pre-caching.');
-
+      
+      return lines.length;
     } catch (error) {
-      if (error.code !== 'ENOENT') {
-        console.error('Error during geo pre-caching:', error);
-      } else {
-        console.log('Log file not found for pre-caching, will proceed with tailing.');
-      }
+      console.error(`Error loading logs from ${filePath}:`, error);
+      return 0;
     }
   }
 
+  async findLogFiles(dirPath) {
+    const files = [];
+    try {
+      const entries = await fs.readdir(dirPath);
+      
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry);
+        const stats = await fs.stat(fullPath);
+        
+        if (stats.isFile() && (entry.endsWith('.log') || entry.includes('traefik'))) {
+          files.push(fullPath);
+        }
+      }
+    } catch (error) {
+      console.error(`Error reading directory ${dirPath}:`, error);
+    }
+    
+    return files;
+  }
+
+  async setupTailForFile(filePath) {
+    try {
+      console.log(`Setting up tail for file: ${filePath}`);
+      
+      const tail = new Tail(filePath, {
+        fromBeginning: false, // Don't re-read from beginning since we loaded historical
+        follow: true,
+        logger: console
+      });
+
+      tail.on('line', async (line) => {
+        await this.parseLine(line, true);
+      });
+
+      tail.on('error', (error) => {
+        console.error(`Tail error for ${filePath}:`, error);
+        this.emit('error', error);
+      });
+
+      this.tails.push(tail);
+    } catch (error) {
+      console.error(`Error setting up tail for ${filePath}:`, error);
+    }
+  }
+
+  async setLogFile(filePath) {
+    return this.setLogFiles([filePath]);
+  }
+
   isPrivateIP(ip) {
+    if (!ip || ip === 'unknown') return true;
+    
     const parts = ip.split('.');
+    if (parts.length !== 4) return false;
+    
     return (
       ip === '127.0.0.1' ||
       ip === 'localhost' ||
+      ip.startsWith('::') ||
+      ip === '::1' ||
       (parts[0] === '10') ||
       (parts[0] === '172' && parseInt(parts[1]) >= 16 && parseInt(parts[1]) <= 31) ||
-      (parts[0] === '192' && parts[1] === '168')
+      (parts[0] === '192' && parts[1] === '168') ||
+      (parts[0] === '169' && parts[1] === '254')
     );
   }
 
@@ -137,25 +191,73 @@ export class LogParser extends EventEmitter {
         serviceName: log.ServiceName || 'unknown',
         routerName: log.RouterName || 'unknown',
         host: log.RequestHost || '',
-        requestAddr: log.RequestAddr || '',  // New field
-        requestHost: log.RequestHost || '',  // Explicit field for RequestHost
-        userAgent: log['request_User-Agent'] || '',
+        requestAddr: log.RequestAddr || '',
+        requestHost: log.RequestHost || '',
+        userAgent: log.request_UserAgent || '',
         size: parseInt(log.DownstreamContentSize || 0),
         country: null,
         city: null,
         countryCode: null,
         lat: null,
-        lon: null
+        lon: null,
+        StartUTC: log.StartUTC,
+        StartLocal: log.StartLocal,
+        Duration: log.Duration,
+        ServiceURL: log.ServiceURL,
+        ServiceAddr: log.ServiceAddr,
+        ClientHost: log.ClientHost,
+        ClientPort: log.ClientPort,
+        ClientUsername: log.ClientUsername,
+        RequestPort: log.RequestPort,
+        RequestProtocol: log.RequestProtocol,
+        RequestScheme: log.RequestScheme,
+        RequestLine: log.RequestLine,
+        RequestContentSize: log.RequestContentSize,
+        OriginDuration: log.OriginDuration,
+        OriginContentSize: log.OriginContentSize,
+        OriginStatus: log.OriginStatus,
+        DownstreamStatus: log.DownstreamStatus,
+        RequestCount: log.RequestCount,
+        GzipRatio: log.GzipRatio,
+        Overhead: log.Overhead,
+        RetryAttempts: log.RetryAttempts,
+        TLSVersion: log.TLSVersion,
+        TLSCipher: log.TLSCipher,
+        TLSClientSubject: log.TLSClientSubject,
+        TraceId: log.TraceId,
+        SpanId: log.SpanId,
+        "downstream_X-Content-Type-Options": log["downstream_X-Content-Type-Options"],
+        "downstream_X-Frame-Options": log["downstream_X-Frame-Options"],
+        "origin_X-Content-Type-Options": log["origin_X-Content-Type-Options"],
+        "origin_X-Frame-Options": log["origin_X-Frame-Options"],
+        "request_Accept": log["request_Accept"],
+        "request_Accept-Encoding": log["request_Accept-Encoding"],
+        "request_Accept-Language": log["request_Accept-Language"],
+        "request_Cdn-Loop": log["request_Cdn-Loop"],
+        "request_Cf-Connecting-Ip": log["request_Cf-Connecting-Ip"],
+        "request_Cf-Ipcountry": log["request_Cf-Ipcountry"],
+        "request_Cf-Ray": log["request_Cf-Ray"],
+        "request_Cf-Visitor": log["request_Cf-Visitor"],
+        "request_Cf-Warp-Tag-Id": log["request_Cf-Warp-Tag-Id"],
+        "request_Dnt": log["request_Dnt"],
+        "request_Priority": log["request_Priority"],
+        "request_Sec-Fetch-Dest": log["request_Sec-Fetch-Dest"],
+        "request_Sec-Fetch-Mode": log["request_Sec-Fetch-Mode"],
+        "request_Sec-Fetch-Site": log["request_Sec-Fetch-Site"],
+        "request_Sec-Fetch-User": log["request_Sec-Fetch-User"],
+        "request_Sec-Gpc": log["request_Sec-Gpc"],
+        "request_Upgrade-Insecure-Requests": log["request_Upgrade-Insecure-Requests"],
+        "request_User-Agent": log["request_User-Agent"],
+        "request_X-Forwarded-Host": log["request_X-Forwarded-Host"],
+        "request_X-Forwarded-Port": log["request_X-Forwarded-Port"],
+        "request_X-Forwarded-Proto": log["request_X-Forwarded-Proto"],
+        "request_X-Forwarded-Server": log["request_X-Forwarded-Server"],
+        "request_X-Real-Ip": log["request_X-Real-Ip"],
       };
 
-      // This call should now be fast because of pre-caching
-      const geoData = await getGeoLocation(parsedLog.clientIP);
-      if (geoData) {
-        parsedLog.country = geoData.country;
-        parsedLog.city = geoData.city;
-        parsedLog.countryCode = geoData.countryCode;
-        parsedLog.lat = geoData.lat;
-        parsedLog.lon = geoData.lon;
+     // Add to geo processing queue if IP is public and not yet processed
+      if (parsedLog.clientIP !== 'unknown' && !this.isPrivateIP(parsedLog.clientIP)) {
+        this.geoProcessingQueue.push(parsedLog);
       }
 
       this.updateStats(parsedLog);
@@ -170,14 +272,65 @@ export class LogParser extends EventEmitter {
       }
 
     } catch (error) {
-      // It's common for log files to have non-JSON lines, so we'll just log a warning.
-      // console.warn('Could not parse log line as JSON:', line);
+      // Ignore non-JSON lines
     }
+  }
+
+  async startGeoProcessing() {
+    if (this.isProcessingGeo) return;
+    
+    this.isProcessingGeo = true;
+    console.log('Starting background geo processing...');
+    
+    while (this.geoProcessingQueue.length > 0) {
+      const batch = this.geoProcessingQueue.splice(0, 40); // Process 40 at a time
+      
+      await Promise.all(batch.map(async (log) => {
+        const geoData = await getGeoLocation(log.clientIP);
+        if (geoData) {
+          log.country = geoData.country;
+          log.city = geoData.city;
+          log.countryCode = geoData.countryCode;
+          log.lat = geoData.lat;
+          log.lon = geoData.lon;
+          
+          // Update country stats
+          if (log.country && log.countryCode) {
+            const key = `${log.countryCode}|${log.country}`;
+            this.stats.countries[key] = (this.stats.countries[key] || 0) + 1;
+          }
+        }
+      }));
+      
+      console.log(`Processed ${batch.length} geo locations. ${this.geoProcessingQueue.length} remaining.`);
+      
+      // Only wait if we have more to process (respecting rate limit)
+      if (this.geoProcessingQueue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 60000)); // 60 seconds between batches
+      }
+    }
+    
+    this.isProcessingGeo = false;
+    console.log('Geo processing complete.');
   }
 
   extractIP(clientAddr) {
     if (!clientAddr) return 'unknown';
-    return clientAddr.split(':')[0];
+    
+    if (clientAddr.startsWith('[')) {
+      const match = clientAddr.match(/\[([^\]]+)\]/);
+      return match ? match[1] : clientAddr;
+    }
+    
+    if (clientAddr.includes('.') && clientAddr.includes(':')) {
+      return clientAddr.substring(0, clientAddr.lastIndexOf(':'));
+    }
+    
+    if (clientAddr.includes(':') && !clientAddr.includes('.')) {
+      return clientAddr;
+    }
+    
+    return clientAddr;
   }
 
   updateStats(log) {
@@ -214,6 +367,7 @@ export class LogParser extends EventEmitter {
       this.stats.topRequestHosts[log.requestHost] = (this.stats.topRequestHosts[log.requestHost] || 0) + 1;
     }
 
+    // Update country stats if already geolocated
     if (log.country && log.countryCode) {
       const key = `${log.countryCode}|${log.country}`;
       this.stats.countries[key] = (this.stats.countries[key] || 0) + 1;
@@ -237,9 +391,9 @@ export class LogParser extends EventEmitter {
       .slice(0, 10)
       .map(([ip, count]) => ({ ip, count }));
 
+    // Return ALL countries for the map, not just top 20
     const topCountries = Object.entries(this.stats.countries)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 20)
       .map(([key, count]) => {
         const [code, name] = key.split('|');
         return { country: name, countryCode: code, count };
@@ -267,7 +421,8 @@ export class LogParser extends EventEmitter {
       topRouters,
       topRequestAddrs,
       topRequestHosts,
-      avgResponseTime: Math.round(this.stats.avgResponseTime * 100) / 100
+      avgResponseTime: Math.round(this.stats.avgResponseTime * 100) / 100,
+      geoProcessingRemaining: this.geoProcessingQueue.length
     };
   }
 
@@ -283,10 +438,34 @@ export class LogParser extends EventEmitter {
     if (filters.router) {
       filteredLogs = filteredLogs.filter(log => log.routerName === filters.router);
     }
+    
+    if (filters.hideUnknown) {
+      filteredLogs = filteredLogs.filter(log => 
+        log.serviceName !== 'unknown' && log.routerName !== 'unknown'
+      );
+    }
+
+    if (filters.hidePrivateIPs) {
+      filteredLogs = filteredLogs.filter(log => !this.isPrivateIP(log.clientIP));
+    }
 
     const start = (page - 1) * limit;
     const end = start + limit;
     const paginatedLogs = filteredLogs.slice(start, end);
+
+    // Try to geolocate any logs that don't have location data yet
+    for (const log of paginatedLogs) {
+      if (!log.country && log.clientIP && !this.isPrivateIP(log.clientIP)) {
+        const geoData = await getGeoLocation(log.clientIP);
+        if (geoData) {
+          log.country = geoData.country;
+          log.city = geoData.city;
+          log.countryCode = geoData.countryCode;
+          log.lat = geoData.lat;
+          log.lon = geoData.lon;
+        }
+      }
+    }
 
     return {
       logs: paginatedLogs,
@@ -305,6 +484,7 @@ export class LogParser extends EventEmitter {
   }
 
   async getGeoStats() {
+    // Return ALL countries, not filtered
     const countries = Object.entries(this.stats.countries)
       .map(([key, count]) => {
         const [code, name] = key.split('|');
@@ -312,6 +492,10 @@ export class LogParser extends EventEmitter {
       })
       .sort((a, b) => b.count - a.count);
 
-    return { countries };
+    return { 
+      countries,
+      totalCountries: countries.length,
+      geoProcessingRemaining: this.geoProcessingQueue.length 
+    };
   }
 }

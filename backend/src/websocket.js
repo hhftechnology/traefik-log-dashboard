@@ -1,3 +1,5 @@
+import { getGeoCacheStats } from './geoLocation.js';
+
 export function setupWebSocket(wss, logParser) {
   wss.on('connection', (ws) => {
     console.log('New WebSocket connection');
@@ -15,6 +17,14 @@ export function setupWebSocket(wss, logParser) {
       ws.send(JSON.stringify({
         type: 'logs',
         data: result.logs
+      }));
+    });
+
+    // Send initial geo stats
+    logParser.getGeoStats().then(geoStats => {
+      ws.send(JSON.stringify({
+        type: 'geoStats',
+        data: geoStats
       }));
     });
 
@@ -40,6 +50,30 @@ export function setupWebSocket(wss, logParser) {
       }
     }, 5000);
 
+    // Update geo stats every 10 seconds
+    const geoStatsInterval = setInterval(async () => {
+      if (ws.readyState === ws.OPEN) {
+        const geoStats = await logParser.getGeoStats();
+        const cacheStats = getGeoCacheStats();
+        
+        ws.send(JSON.stringify({
+          type: 'geoStats',
+          data: geoStats
+        }));
+
+        // Send geo processing status
+        ws.send(JSON.stringify({
+          type: 'geoProcessingStatus',
+          data: {
+            geoProcessingRemaining: geoStats.geoProcessingRemaining || 0,
+            cachedLocations: cacheStats.keys,
+            totalCountries: geoStats.totalCountries,
+            isProcessing: logParser.isProcessingGeo
+          }
+        }));
+      }
+    }, 10000);
+
     // Handle client messages
     ws.on('message', async (message) => {
       try {
@@ -61,6 +95,14 @@ export function setupWebSocket(wss, logParser) {
               data: stats
             }));
             break;
+
+          case 'getGeoStats':
+            const geoStats = await logParser.getGeoStats();
+            ws.send(JSON.stringify({
+              type: 'geoStats',
+              data: geoStats
+            }));
+            break;
         }
       } catch (error) {
         console.error('WebSocket message error:', error);
@@ -72,6 +114,7 @@ export function setupWebSocket(wss, logParser) {
       console.log('WebSocket connection closed');
       logParser.removeListener('newLog', newLogHandler);
       clearInterval(statsInterval);
+      clearInterval(geoStatsInterval);
     });
 
     ws.on('error', (error) => {
