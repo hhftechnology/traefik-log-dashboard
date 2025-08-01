@@ -48,6 +48,33 @@ export interface LogEntry {
   TLSClientSubject: string;
   TraceId: string;
   SpanId: string;
+  "downstream_X-Content-Type-Options"?: string;
+  "downstream_X-Frame-Options"?: string;
+  "origin_X-Content-Type-Options"?: string;
+  "origin_X-Frame-Options"?: string;
+  "request_Accept"?: string;
+  "request_Accept-Encoding"?: string;
+  "request_Accept-Language"?: string;
+  "request_Cdn-Loop"?: string;
+  "request_Cf-Connecting-Ip"?: string;
+  "request_Cf-Ipcountry"?: string;
+  "request_Cf-Ray"?: string;
+  "request_Cf-Visitor"?: string;
+  "request_Cf-Warp-Tag-Id"?: string;
+  "request_Dnt"?: string;
+  "request_Priority"?: string;
+  "request_Sec-Fetch-Dest"?: string;
+  "request_Sec-Fetch-Mode"?: string;
+  "request_Sec-Fetch-Site"?: string;
+  "request_Sec-Fetch-User"?: string;
+  "request_Sec-Gpc"?: string;
+  "request_Upgrade-Insecure-Requests"?: string;
+  "request_User-Agent"?: string;
+  "request_X-Forwarded-Host"?: string;
+  "request_X-Forwarded-Port"?: string;
+  "request_X-Forwarded-Proto"?: string;
+  "request_X-Forwarded-Server"?: string;
+  "request_X-Real-Ip"?: string;
 }
 
 export interface Stats {

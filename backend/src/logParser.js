@@ -142,7 +142,7 @@ export class LogParser extends EventEmitter {
       console.log(`Pre-cached ${Math.min(i + batchSize, uniqueIPs.length)} of ${uniqueIPs.length} IPs`);
       
       if (i + batchSize < uniqueIPs.length) {
-        await new Promise(resolve => setTimeout(resolve, 60000));
+        await new Promise(resolve => setTimeout(resolve, 70000));
       }
     }
 
@@ -221,8 +221,6 @@ export class LogParser extends EventEmitter {
         countryCode: null,
         lat: null,
         lon: null,
-
-        // New fields
         StartUTC: log.StartUTC,
         StartLocal: log.StartLocal,
         Duration: log.Duration,
@@ -248,7 +246,34 @@ export class LogParser extends EventEmitter {
         TLSCipher: log.TLSCipher,
         TLSClientSubject: log.TLSClientSubject,
         TraceId: log.TraceId,
-        SpanId: log.SpanId
+        SpanId: log.SpanId,
+        "downstream_X-Content-Type-Options": log["downstream_X-Content-Type-Options"],
+        "downstream_X-Frame-Options": log["downstream_X-Frame-Options"],
+        "origin_X-Content-Type-Options": log["origin_X-Content-Type-Options"],
+        "origin_X-Frame-Options": log["origin_X-Frame-Options"],
+        "request_Accept": log["request_Accept"],
+        "request_Accept-Encoding": log["request_Accept-Encoding"],
+        "request_Accept-Language": log["request_Accept-Language"],
+        "request_Cdn-Loop": log["request_Cdn-Loop"],
+        "request_Cf-Connecting-Ip": log["request_Cf-Connecting-Ip"],
+        "request_Cf-Ipcountry": log["request_Cf-Ipcountry"],
+        "request_Cf-Ray": log["request_Cf-Ray"],
+        "request_Cf-Visitor": log["request_Cf-Visitor"],
+        "request_Cf-Warp-Tag-Id": log["request_Cf-Warp-Tag-Id"],
+        "request_Dnt": log["request_Dnt"],
+        "request_Priority": log["request_Priority"],
+        "request_Sec-Fetch-Dest": log["request_Sec-Fetch-Dest"],
+        "request_Sec-Fetch-Mode": log["request_Sec-Fetch-Mode"],
+        "request_Sec-Fetch-Site": log["request_Sec-Fetch-Site"],
+        "request_Sec-Fetch-User": log["request_Sec-Fetch-User"],
+        "request_Sec-Gpc": log["request_Sec-Gpc"],
+        "request_Upgrade-Insecure-Requests": log["request_Upgrade-Insecure-Requests"],
+        "request_User-Agent": log["request_User-Agent"],
+        "request_X-Forwarded-Host": log["request_X-Forwarded-Host"],
+        "request_X-Forwarded-Port": log["request_X-Forwarded-Port"],
+        "request_X-Forwarded-Proto": log["request_X-Forwarded-Proto"],
+        "request_X-Forwarded-Server": log["request_X-Forwarded-Server"],
+        "request_X-Real-Ip": log["request_X-Real-Ip"],
       };
 
       const geoData = await getGeoLocation(parsedLog.clientIP);
@@ -408,6 +433,10 @@ export class LogParser extends EventEmitter {
       filteredLogs = filteredLogs.filter(log => 
         log.serviceName !== 'unknown' && log.routerName !== 'unknown'
       );
+    }
+
+    if (filters.hidePrivateIPs) {
+      filteredLogs = filteredLogs.filter(log => !this.isPrivateIP(log.clientIP));
     }
 
     const start = (page - 1) * limit;

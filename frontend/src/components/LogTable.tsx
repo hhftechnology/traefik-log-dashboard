@@ -44,11 +44,12 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
   const [loading, setLoading] = useState(false);
   const [hideUnknown, setHideUnknown] = useState(false);
+  const [hidePrivateIPs, setHidePrivateIPs] = useState(false); // New state for private IP filter
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
 
   // Column visibility state
-  const [columnVisibility, setColumnVisibility] = useState<Record<keyof LogEntry, boolean>>({
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
     id: false,
     timestamp: true,
     clientIP: true,
@@ -94,9 +95,36 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
     TLSClientSubject: false,
     TraceId: false,
     SpanId: false,
+    "downstream_X-Content-Type-Options": false,
+    "downstream_X-Frame-Options": false,
+    "origin_X-Content-Type-Options": false,
+    "origin_X-Frame-Options": false,
+    "request_Accept": false,
+    "request_Accept-Encoding": false,
+    "request_Accept-Language": false,
+    "request_Cdn-Loop": false,
+    "request_Cf-Connecting-Ip": true,
+    "request_Cf-Ipcountry": true,
+    "request_Cf-Ray": false,
+    "request_Cf-Visitor": false,
+    "request_Cf-Warp-Tag-Id": false,
+    "request_Dnt": false,
+    "request_Priority": false,
+    "request_Sec-Fetch-Dest": false,
+    "request_Sec-Fetch-Mode": false,
+    "request_Sec-Fetch-Site": false,
+    "request_Sec-Fetch-User": false,
+    "request_Sec-Gpc": false,
+    "request_Upgrade-Insecure-Requests": false,
+    "request_User-Agent": false,
+    "request_X-Forwarded-Host": false,
+    "request_X-Forwarded-Port": false,
+    "request_X-Forwarded-Proto": false,
+    "request_X-Forwarded-Server": false,
+    "request_X-Real-Ip": true,
   });
 
-  const columnNames: Record<keyof LogEntry, string> = {
+  const columnNames: Record<string, string> = {
     id: 'ID',
     timestamp: 'Time',
     clientIP: 'Client IP',
@@ -142,6 +170,33 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
     TLSClientSubject: 'TLS Client Subject',
     TraceId: 'Trace ID',
     SpanId: 'Span ID',
+    "downstream_X-Content-Type-Options": "Downstream X-Content-Type-Options",
+    "downstream_X-Frame-Options": "Downstream X-Frame-Options",
+    "origin_X-Content-Type-Options": "Origin X-Content-Type-Options",
+    "origin_X-Frame-Options": "Origin X-Frame-Options",
+    "request_Accept": "Accept",
+    "request_Accept-Encoding": "Accept-Encoding",
+    "request_Accept-Language": "Accept-Language",
+    "request_Cdn-Loop": "CDN Loop",
+    "request_Cf-Connecting-Ip": "CF Connecting IP",
+    "request_Cf-Ipcountry": "CF IP Country",
+    "request_Cf-Ray": "CF Ray",
+    "request_Cf-Visitor": "CF Visitor",
+    "request_Cf-Warp-Tag-Id": "CF Warp Tag ID",
+    "request_Dnt": "DNT",
+    "request_Priority": "Priority",
+    "request_Sec-Fetch-Dest": "Sec-Fetch-Dest",
+    "request_Sec-Fetch-Mode": "Sec-Fetch-Mode",
+    "request_Sec-Fetch-Site": "Sec-Fetch-Site",
+    "request_Sec-Fetch-User": "Sec-Fetch-User",
+    "request_Sec-Gpc": "Sec-GPC",
+    "request_Upgrade-Insecure-Requests": "Upgrade-Insecure-Requests",
+    "request_User-Agent": "User-Agent",
+    "request_X-Forwarded-Host": "X-Forwarded-Host",
+    "request_X-Forwarded-Port": "X-Forwarded-Port",
+    "request_X-Forwarded-Proto": "X-Forwarded-Proto",
+    "request_X-Forwarded-Server": "X-Forwarded-Server",
+    "request_X-Real-Ip": "X-Real-IP",
   };
 
   const visibleColumns = useMemo(() => {
@@ -155,7 +210,8 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
         params: {
           page,
           limit,
-          hideUnknown
+          hideUnknown,
+          hidePrivateIPs // Pass new filter to the backend
         }
       });
       setLogs(response.data.logs);
@@ -170,11 +226,11 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
 
   useEffect(() => {
     fetchLogs(currentPage, pageSize);
-  }, [currentPage, pageSize, hideUnknown]);
+  }, [currentPage, pageSize, hideUnknown, hidePrivateIPs]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [hideUnknown, pageSize]);
+  }, [hideUnknown, pageSize, hidePrivateIPs]);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -278,7 +334,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
     return rangeWithDots;
   };
 
-  const renderCellContent = (log: LogEntry, column: keyof LogEntry) => {
+  const renderCellContent = (log: LogEntry, column: string) => {
     switch (column) {
       case 'timestamp':
         return <span className="font-mono text-xs">{format(new Date(log.timestamp), "HH:mm:ss")}</span>;
@@ -304,7 +360,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
       case 'size':
         return <span className="text-xs">{(log.size / 1024).toFixed(1)} KB</span>;
       default:
-        return <span className="text-xs">{String(log[column] ?? '-')}</span>;
+        return <span className="text-xs">{String(log[column as keyof LogEntry] ?? '-')}</span>;
     }
   };
   
@@ -322,7 +378,20 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
               htmlFor="hide-unknown" 
               className="text-sm font-normal cursor-pointer"
             >
-              Hide entries with unknown service/router
+              Hide unknown service/router
+            </Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="hide-private-ips" 
+              checked={hidePrivateIPs}
+              onCheckedChange={(checked) => setHidePrivateIPs(checked as boolean)}
+            />
+            <Label 
+              htmlFor="hide-private-ips" 
+              className="text-sm font-normal cursor-pointer"
+            >
+              Hide private IPs
             </Label>
           </div>
         </div>
@@ -336,7 +405,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              {(Object.keys(columnNames) as Array<keyof LogEntry>).map(key => (
+              {(Object.keys(columnNames) as Array<string>).map(key => (
                 <DropdownMenuCheckboxItem
                   key={key}
                   checked={columnVisibility[key]}
@@ -379,11 +448,11 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
                 <TableHead 
                   key={column}
                   className="cursor-pointer select-none hover:bg-muted/50 transition-colors"
-                  onClick={() => handleSort(column)}
+                  onClick={() => handleSort(column as SortColumn)}
                 >
                   <div className="flex items-center gap-1">
                     {columnNames[column]}
-                    {getSortIcon(column)}
+                    {getSortIcon(column as SortColumn)}
                   </div>
                 </TableHead>
               ))}
@@ -407,7 +476,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
                 <TableRow key={log.id}>
                   {visibleColumns.map(column => (
                     <TableCell key={column}>
-                      {renderCellContent(log, column)}
+                      {renderCellContent(log, column as keyof LogEntry)}
                     </TableCell>
                   ))}
                 </TableRow>
