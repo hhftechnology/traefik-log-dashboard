@@ -73,6 +73,11 @@
   transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
+/* Fix Lucide icons to use proper theme colors */
+.lucide {
+  @apply text-current;
+}
+
 /* Ensure proper contrast for charts in dark mode */
 .dark .recharts-text {
   fill: hsl(var(--foreground)) !important;
@@ -95,6 +100,40 @@
   stroke: hsl(var(--border)) !important;
 }
 
+/* Fix dropdown menu checkbox indicators in dark mode */
+.dark [data-radix-dropdown-menu-content] [data-radix-dropdown-menu-checkbox-item] svg {
+  color: hsl(var(--primary-foreground)) !important;
+}
+
+/* Fix table sorting icons in dark mode */
+.dark table th svg {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.dark table th:hover svg {
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Fix button icons in dark mode */
+.dark button svg {
+  color: inherit !important;
+}
+
+/* Fix pagination dots styling */
+.dark .pagination-dots {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Fix select dropdown arrows */
+.dark [data-radix-select-trigger] svg {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Fix dropdown menu trigger icons */
+.dark [data-radix-dropdown-menu-trigger] svg {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
 /* Scrollbar styling for dark mode */
 .dark ::-webkit-scrollbar {
   width: 8px;
@@ -112,4 +151,60 @@
 
 .dark ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--accent-foreground));
+}
+
+/* Fix theme toggle icons */
+.theme-toggle-icon {
+  @apply text-muted-foreground;
+}
+
+.dark .theme-toggle-icon {
+  @apply text-muted-foreground;
+}
+
+/* Fix checkbox styling in dark mode */
+.dark [data-radix-checkbox-root] {
+  border-color: hsl(var(--border)) !important;
+}
+
+.dark [data-radix-checkbox-root][data-state="checked"] {
+  background-color: hsl(var(--primary)) !important;
+  border-color: hsl(var(--primary)) !important;
+}
+
+/* Fix badge colors in dark mode */
+.dark .badge-success {
+  @apply bg-green-900 text-green-100 border-green-800;
+}
+
+.dark .badge-warning {
+  @apply bg-yellow-900 text-yellow-100 border-yellow-800;
+}
+
+.dark .badge-destructive {
+  @apply bg-red-900 text-red-100 border-red-800;
+}
+
+/* Ensure all interactive elements have proper focus states in dark mode */
+.dark button:focus-visible,
+.dark select:focus-visible,
+.dark input:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Fix muted text colors consistently across themes */
+.text-muted-foreground {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+/* Fix icon consistency */
+svg.lucide {
+  @apply stroke-current;
+}
+
+/* Ensure proper hover states for interactive elements */
+.dark button:hover svg,
+.dark [role="button"]:hover svg {
+  color: inherit !important;
 }

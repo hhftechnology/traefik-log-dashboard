@@ -43,7 +43,7 @@ export function Dashboard() {
         <div className="flex items-center gap-4">
           <a href="https://github.com/hhftechnology" target="_blank" rel="noopener noreferrer">
             <Button variant="outline" size="icon">
-              <Github className="h-4 w-4" />
+              <Github className="h-4 w-4 text-muted-foreground" />
             </Button>
           </a>
           <ThemeToggle />

@@ -44,7 +44,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
   const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
   const [loading, setLoading] = useState(false);
   const [hideUnknown, setHideUnknown] = useState(false);
-  const [hidePrivateIPs, setHidePrivateIPs] = useState(false); // New state for private IP filter
+  const [hidePrivateIPs, setHidePrivateIPs] = useState(false);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
 
@@ -211,7 +211,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
           page,
           limit,
           hideUnknown,
-          hidePrivateIPs // Pass new filter to the backend
+          hidePrivateIPs
         }
       });
       setLogs(response.data.logs);
@@ -302,9 +302,9 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
   };
 
   const formatResponseTime = (time: number) => {
-    if (time < 100) return { value: time.toFixed(0), unit: "ms", color: "text-green-600" };
-    if (time < 1000) return { value: time.toFixed(0), unit: "ms", color: "text-yellow-600" };
-    return { value: (time / 1000).toFixed(2), unit: "s", color: "text-red-600" };
+    if (time < 100) return { value: time.toFixed(0), unit: "ms", color: "text-green-600 dark:text-green-400" };
+    if (time < 1000) return { value: time.toFixed(0), unit: "ms", color: "text-yellow-600 dark:text-yellow-400" };
+    return { value: (time / 1000).toFixed(2), unit: "s", color: "text-red-600 dark:text-red-400" };
   };
 
   const getPageRange = () => {
@@ -397,10 +397,10 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
         </div>
         
         <div className="flex items-center gap-4">
-        <DropdownMenu>
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
-                <Settings className="h-4 w-4" />
+                <Settings className="h-4 w-4 text-muted-foreground" />
                 Columns
               </Button>
             </DropdownMenuTrigger>
@@ -512,7 +512,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
           <div className="flex gap-1">
             {getPageRange().map((page, index) => {
               if (page === '...') {
-                return <span key={`dots-${index}`} className="px-2 py-1">...</span>;
+                return <span key={`dots-${index}`} className="px-2 py-1 text-muted-foreground">...</span>;
               }
               return (
                 <Button
@@ -539,7 +539,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
           </Button>
           <Button
             variant="outline"
-            size="icon"
+            size="icon" 
             onClick={() => setCurrentPage(totalPages)}
             disabled={currentPage === totalPages || loading}
           >
