@@ -1,5 +1,5 @@
 # Build stage
-FROM 11notes/node:22.14.0 AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM 11notes/nginx:1.28.0
+FROM nginx:1.28-alpine-slim
 
 # Install envsubst for template processing
 RUN apk add --no-cache gettext

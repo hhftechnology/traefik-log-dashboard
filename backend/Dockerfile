@@ -1,15 +1,21 @@
-FROM 11notes/node:22.14.0
+# Build stage
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
+RUN npm install
 
-# Install dependencies
-RUN npm install --only=production
-
-# Copy source code
 COPY src ./src
+
+# Production stage
+FROM node:22-alpine
+
+WORKDIR /app
+
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/src ./src
 
 # Create logs directory
 RUN mkdir -p /logs
