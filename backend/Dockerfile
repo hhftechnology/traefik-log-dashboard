@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM 11notes/node:22.14.0
 
 WORKDIR /app
 
