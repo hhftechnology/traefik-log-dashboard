@@ -150,7 +150,9 @@ type LogParser struct {
 	stats                 Stats
 	lastTimestamp         time.Time
 	requestsInLastSecond  int
-	geoProcessingQueue    []LogEntry
+	geoProcessingQueue    []string                // Changed to store unique IPs instead of log entries
+	processedIPs          map[string]bool        // Track which IPs have been processed
+	ipToLogMap            map[string][]*LogEntry // Map IPs to their log entries for updating
 	isProcessingGeo       bool
 	mu                    sync.RWMutex
 	listeners             []chan LogEntry
@@ -173,7 +175,9 @@ func NewLogParser() *LogParser {
 			Countries:       make(map[string]int),
 		},
 		lastTimestamp:        time.Now(),
-		geoProcessingQueue:   make([]LogEntry, 0),
+		geoProcessingQueue:   make([]string, 0),
+		processedIPs:         make(map[string]bool),
+		ipToLogMap:           make(map[string][]*LogEntry),
 		listeners:            make([]chan LogEntry, 0),
 		topIPs:               make(map[string]int),
 		topRouters:           make(map[string]int),
@@ -335,7 +339,7 @@ func (lp *LogParser) parseLine(line string, emit bool) {
 		return // Ignore non-JSON lines
 	}
 
-	log := LogEntry{
+	logEntry := LogEntry{
 		ID:           fmt.Sprintf("%d-%d", time.Now().UnixNano(), len(lp.logs)),
 		Timestamp:    getStringValue(raw, "time", time.Now().Format(time.RFC3339)),
 		ClientIP:     lp.extractIP(getStringValue(raw, "ClientAddr", "")),
@@ -380,24 +384,36 @@ func (lp *LogParser) parseLine(line string, emit bool) {
 		SpanId:             getStringValue(raw, "SpanId", ""),
 	}
 
-	// Add to geo processing queue if needed
-	if log.ClientIP != "unknown" && !lp.isPrivateIP(log.ClientIP) {
-		lp.mu.Lock()
-		lp.geoProcessingQueue = append(lp.geoProcessingQueue, log)
-		lp.mu.Unlock()
-	}
-
-	lp.updateStats(&log)
+	lp.updateStats(&logEntry)
 
 	lp.mu.Lock()
-	lp.logs = append([]LogEntry{log}, lp.logs...)
+	// Add log to the main logs slice
+	lp.logs = append([]LogEntry{logEntry}, lp.logs...)
 	if len(lp.logs) > lp.maxLogs {
 		lp.logs = lp.logs[:lp.maxLogs]
+	}
+
+	// Get pointer to the actual log entry in the slice for geo processing
+	logPtr := &lp.logs[0]
+
+	// Add to geo processing queue if needed (with deduplication)
+	if logEntry.ClientIP != "unknown" && !lp.isPrivateIP(logEntry.ClientIP) {
+		// Check if this IP has already been processed or is in queue
+		if !lp.processedIPs[logEntry.ClientIP] {
+			lp.geoProcessingQueue = append(lp.geoProcessingQueue, logEntry.ClientIP)
+			lp.processedIPs[logEntry.ClientIP] = true
+		}
+		
+		// Add to IP-to-log mapping for updating when geo processing completes
+		if lp.ipToLogMap[logEntry.ClientIP] == nil {
+			lp.ipToLogMap[logEntry.ClientIP] = make([]*LogEntry, 0)
+		}
+		lp.ipToLogMap[logEntry.ClientIP] = append(lp.ipToLogMap[logEntry.ClientIP], logPtr)
 	}
 	lp.mu.Unlock()
 
 	if emit {
-		lp.notifyListeners(log)
+		lp.notifyListeners(logEntry)
 	}
 }
 
@@ -426,8 +442,10 @@ func (lp *LogParser) ClearLogs() {
 	lp.topRequestHosts = make(map[string]int)
 	lp.requestsInLastSecond = 0
 	
-	// Clear geo processing queue
-	lp.geoProcessingQueue = make([]LogEntry, 0)
+	// Clear geo processing data
+	lp.geoProcessingQueue = make([]string, 0)
+	lp.processedIPs = make(map[string]bool)
+	lp.ipToLogMap = make(map[string][]*LogEntry)
 	
 	// Notify listeners of the clear
 	for _, listener := range lp.listeners {
@@ -649,7 +667,7 @@ func (lp *LogParser) GetLogs(params LogsParams) LogsResult {
 
 	paginatedLogs := filteredLogs[start:end]
 
-	// Try to geolocate logs without location data
+	// Try to geolocate logs without location data (on-demand for display)
 	for i := range paginatedLogs {
 		if paginatedLogs[i].Country == nil && paginatedLogs[i].ClientIP != "" && !lp.isPrivateIP(paginatedLogs[i].ClientIP) {
 			geoData := GetGeoLocation(paginatedLogs[i].ClientIP)
@@ -746,37 +764,60 @@ func (lp *LogParser) startGeoProcessing() {
 			break
 		}
 
-		// Process up to 40 at a time
+		// Process up to 40 IPs at a time
 		batchSize := 40
 		if len(lp.geoProcessingQueue) < batchSize {
 			batchSize = len(lp.geoProcessingQueue)
 		}
-		batch := lp.geoProcessingQueue[:batchSize]
+		ipBatch := lp.geoProcessingQueue[:batchSize]
 		lp.geoProcessingQueue = lp.geoProcessingQueue[batchSize:]
 		lp.mu.Unlock()
 
-		// Process batch
-		for i := range batch {
-			geoData := GetGeoLocation(batch[i].ClientIP)
+		// Process each IP in the batch
+		for _, ip := range ipBatch {
+			geoData := GetGeoLocation(ip)
 			if geoData != nil {
-				batch[i].Country = &geoData.Country
-				batch[i].City = &geoData.City
-				batch[i].CountryCode = &geoData.CountryCode
-				batch[i].Lat = &geoData.Lat
-				batch[i].Lon = &geoData.Lon
-
-				// Update country stats
 				lp.mu.Lock()
+				
+				// Update country stats
 				key := fmt.Sprintf("%s|%s", geoData.CountryCode, geoData.Country)
-				lp.stats.Countries[key]++
+				// Only increment if this is the first time we're processing this IP
+				if _, exists := lp.stats.Countries[key]; !exists {
+					lp.stats.Countries[key] = 0
+				}
+				
+				// Update all log entries for this IP
+				if logPtrs, exists := lp.ipToLogMap[ip]; exists {
+					// Count how many logs we're updating for this IP to add to country stats
+					newLogsCount := 0
+					for _, logPtr := range logPtrs {
+						if logPtr.Country == nil { // Only count if not already geolocated
+							logPtr.Country = &geoData.Country
+							logPtr.City = &geoData.City
+							logPtr.CountryCode = &geoData.CountryCode
+							logPtr.Lat = &geoData.Lat
+							logPtr.Lon = &geoData.Lon
+							newLogsCount++
+						}
+					}
+					lp.stats.Countries[key] += newLogsCount
+					
+					// Remove from map as it's processed
+					delete(lp.ipToLogMap, ip)
+				}
+				
 				lp.mu.Unlock()
 			}
 		}
 
-		log.Printf("Processed %d geo locations. %d remaining.", len(batch), len(lp.geoProcessingQueue))
+		log.Printf("Processed geo data for %d IPs. %d IPs remaining in queue.", len(ipBatch), len(lp.geoProcessingQueue))
 
-		// Rate limit
-		if len(lp.geoProcessingQueue) > 0 {
+		// Rate limit - only if there are more IPs to process
+		lp.mu.RLock()
+		remainingIPs := len(lp.geoProcessingQueue)
+		lp.mu.RUnlock()
+		
+		if remainingIPs > 0 {
 			time.Sleep(60 * time.Second)
 		}
 	}
