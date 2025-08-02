@@ -93,6 +93,10 @@ export interface Stats {
   topRouters: Array<{ router: string; count: number }>;
   topRequestAddrs: Array<{ addr: string; count: number }>;
   topRequestHosts: Array<{ host: string; count: number }>;
+  totalDataTransmitted: number;   // Total bytes transmitted
+  oldestLogTime: string;          // Oldest log timestamp
+  newestLogTime: string;          // Newest log timestamp
+  analysisPeriod: string;         // Human readable period
 }
 
 interface WebSocketMessage {
@@ -121,6 +125,10 @@ function updateStatsWithNewLog(currentStats: Stats | null, newLog: LogEntry): St
       topRouters: [{ router: newLog.routerName, count: 1 }],
       topRequestAddrs: newLog.requestAddr ? [{ addr: newLog.requestAddr, count: 1 }] : [],
       topRequestHosts: newLog.requestHost ? [{ host: newLog.requestHost, count: 1 }] : [],
+      totalDataTransmitted: typeof newLog.size === 'number' ? newLog.size : 0,
+      oldestLogTime: newLog.timestamp,
+      newestLogTime: newLog.timestamp,
+      analysisPeriod: '', // You can update this as needed elsewhere
     };
   }
 

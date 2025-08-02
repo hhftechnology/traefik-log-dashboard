@@ -1,16 +1,36 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, AlertCircle, CheckCircle, Clock, Globe, Server, TrendingUp } from "lucide-react";
+import { Activity, AlertCircle, CheckCircle, Clock, Globe, Server, TrendingUp, HardDrive, Calendar } from "lucide-react";
 import { Stats } from "@/hooks/useWebSocket";
 
 interface StatsCardsProps {
   stats: Stats | null;
 }
 
+// Helper function to format bytes
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+// Helper function to format date for display
+function formatDateForDisplay(dateStr: string): string {
+  if (!dateStr) return 'N/A';
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+  } catch {
+    return 'N/A';
+  }
+}
+
 export function StatsCards({ stats }: StatsCardsProps) {
   if (!stats) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {[...Array(8)].map((_, i) => (
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {[...Array(10)].map((_, i) => (
           <Card key={i}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Loading...</CardTitle>
@@ -33,6 +53,22 @@ export function StatsCards({ stats }: StatsCardsProps) {
       color: "text-blue-600",
     },
     {
+      title: "Data Transmitted",
+      value: formatBytes(stats.totalDataTransmitted || 0),
+      icon: HardDrive,
+      description: "Total bandwidth",
+      color: "text-cyan-600",
+    },
+    {
+      title: "Analysis Period",
+      value: stats.analysisPeriod || "N/A",
+      icon: Calendar,
+      description: stats.oldestLogTime && stats.newestLogTime ? 
+        `${formatDateForDisplay(stats.oldestLogTime).split(' ')[0]} - ${formatDateForDisplay(stats.newestLogTime).split(' ')[0]}` : 
+        "No data",
+      color: "text-indigo-600",
+    },
+    {
       title: "Requests/sec",
       value: stats.requestsPerSecond.toFixed(1),
       icon: TrendingUp,
@@ -48,21 +84,21 @@ export function StatsCards({ stats }: StatsCardsProps) {
     },
     {
       title: "Success Rate",
-      value: `${((stats.requests2xx / stats.totalRequests) * 100).toFixed(1)}%`,
+      value: `${stats.totalRequests > 0 ? ((stats.requests2xx / stats.totalRequests) * 100).toFixed(1) : 0}%`,
       icon: CheckCircle,
       description: "2xx responses",
       color: "text-green-600",
     },
     {
       title: "Error Rate (4xx)",
-      value: `${((stats.requests4xx / stats.totalRequests) * 100).toFixed(1)}%`,
+      value: `${stats.totalRequests > 0 ? ((stats.requests4xx / stats.totalRequests) * 100).toFixed(1) : 0}%`,
       icon: AlertCircle,
       description: "Client errors",
       color: "text-yellow-600",
     },
     {
       title: "Error Rate (5xx)",
-      value: `${((stats.requests5xx / stats.totalRequests) * 100).toFixed(1)}%`,
+      value: `${stats.totalRequests > 0 ? ((stats.requests5xx / stats.totalRequests) * 100).toFixed(1) : 0}%`,
       icon: AlertCircle,
       description: "Server errors",
       color: "text-red-600",
@@ -84,7 +120,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
   ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
       {cards.map((card, index) => {
         const Icon = card.icon;
         return (

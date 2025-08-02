@@ -88,6 +88,10 @@ type Stats struct {
 	TopRequestAddrs        []AddrCount            `json:"topRequestAddrs"`
 	TopRequestHosts        []HostCount            `json:"topRequestHosts"`
 	GeoProcessingRemaining int                    `json:"geoProcessingRemaining"`
+	TotalDataTransmitted   int64                  `json:"totalDataTransmitted"`   // Total bytes transmitted
+	OldestLogTime          string                 `json:"oldestLogTime"`          // Oldest log timestamp
+	NewestLogTime          string                 `json:"newestLogTime"`          // Newest log timestamp
+	AnalysisPeriod         string                 `json:"analysisPeriod"`         // Human readable period
 }
 
 type IPCount struct {
@@ -160,6 +164,9 @@ type LogParser struct {
 	topRouters            map[string]int
 	topRequestAddrs       map[string]int
 	topRequestHosts       map[string]int
+	totalDataTransmitted  int64                  // Track total bytes
+	oldestLogTime         time.Time              // Track oldest log
+	newestLogTime         time.Time              // Track newest log
 }
 
 func NewLogParser() *LogParser {
@@ -183,6 +190,9 @@ func NewLogParser() *LogParser {
 		topRouters:           make(map[string]int),
 		topRequestAddrs:      make(map[string]int),
 		topRequestHosts:      make(map[string]int),
+		totalDataTransmitted: 0,
+		oldestLogTime:        time.Time{},
+		newestLogTime:        time.Time{},
 	}
 }
 
@@ -442,6 +452,11 @@ func (lp *LogParser) ClearLogs() {
 	lp.topRequestHosts = make(map[string]int)
 	lp.requestsInLastSecond = 0
 	
+	// Reset data tracking
+	lp.totalDataTransmitted = 0
+	lp.oldestLogTime = time.Time{}
+	lp.newestLogTime = time.Time{}
+	
 	// Clear geo processing data
 	lp.geoProcessingQueue = make([]string, 0)
 	lp.processedIPs = make(map[string]bool)
@@ -559,6 +574,19 @@ func (lp *LogParser) updateStats(log *LogEntry) {
 		lp.stats.Countries[key]++
 	}
 
+	// Update total data transmitted
+	lp.totalDataTransmitted += int64(log.Size)
+	
+	// Parse timestamp and update oldest/newest
+	if timestamp, err := time.Parse(time.RFC3339, log.Timestamp); err == nil {
+		if lp.oldestLogTime.IsZero() || timestamp.Before(lp.oldestLogTime) {
+			lp.oldestLogTime = timestamp
+		}
+		if lp.newestLogTime.IsZero() || timestamp.After(lp.newestLogTime) {
+			lp.newestLogTime = timestamp
+		}
+	}
+
 	// Update average response time
 	totalResponseTime := 0.0
 	for _, l := range lp.logs {
@@ -584,6 +612,31 @@ func (lp *LogParser) GetStats() Stats {
 
 	stats := lp.stats
 	stats.GeoProcessingRemaining = len(lp.geoProcessingQueue)
+
+	// Add new fields
+	stats.TotalDataTransmitted = lp.totalDataTransmitted
+	
+	// Format timestamps
+	if !lp.oldestLogTime.IsZero() {
+		stats.OldestLogTime = lp.oldestLogTime.Format(time.RFC3339)
+	}
+	if !lp.newestLogTime.IsZero() {
+		stats.NewestLogTime = lp.newestLogTime.Format(time.RFC3339)
+	}
+	
+	// Calculate analysis period
+	if !lp.oldestLogTime.IsZero() && !lp.newestLogTime.IsZero() {
+		duration := lp.newestLogTime.Sub(lp.oldestLogTime)
+		if duration < time.Minute {
+			stats.AnalysisPeriod = fmt.Sprintf("%.0f seconds", duration.Seconds())
+		} else if duration < time.Hour {
+			stats.AnalysisPeriod = fmt.Sprintf("%.1f minutes", duration.Minutes())
+		} else if duration < 24*time.Hour {
+			stats.AnalysisPeriod = fmt.Sprintf("%.1f hours", duration.Hours())
+		} else {
+			stats.AnalysisPeriod = fmt.Sprintf("%.1f days", duration.Hours()/24)
+		}
+	}
 
 	// Get top IPs
 	stats.TopIPs = getTopItems(lp.topIPs, 10, func(k string, v int) IPCount {

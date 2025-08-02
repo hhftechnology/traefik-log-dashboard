@@ -47,6 +47,7 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
   const [hidePrivateIPs, setHidePrivateIPs] = useState(false);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
+  const [pathTruncateLength, setPathTruncateLength] = useState(50); // Configurable path length
 
   // Column visibility state
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
@@ -359,7 +360,23 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
       case 'method':
         return <Badge variant={getMethodBadgeVariant(log.method)}>{log.method}</Badge>;
       case 'path':
-        return <span className="max-w-xs truncate font-mono text-xs">{log.path}</span>;
+        const truncatedPath = log.path.length > pathTruncateLength 
+          ? `${log.path.substring(0, pathTruncateLength)}...` 
+          : log.path;
+        return (
+          <span 
+            className="max-w-xs font-mono text-xs cursor-help hover:text-blue-600 dark:hover:text-blue-400 transition-colors" 
+            title={log.path}
+            style={{ 
+              display: 'block',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}
+          >
+            {truncatedPath}
+          </span>
+        );
       case 'status':
         return <Badge variant={getStatusBadgeVariant(log.status)}>{log.status}</Badge>;
       case 'responseTime':
@@ -420,6 +437,21 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
         </div>
         
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Path length:</span>
+            <Select value={pathTruncateLength.toString()} onValueChange={(value) => setPathTruncateLength(parseInt(value))}>
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">30</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="80">80</SelectItem>
+                <SelectItem value="120">120</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">

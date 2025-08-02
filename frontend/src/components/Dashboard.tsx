@@ -1,5 +1,4 @@
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { StatsCards } from "./StatsCards";
 import { LogTable } from "./LogTable";
 import { GeoMap } from "./GeoMap";
 import { TopListsCards } from "./TopListsCards";
@@ -14,8 +13,11 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recha
 import { Footer } from "./Footer";
 import { useState, useEffect } from "react";
 
+// Import the enhanced StatsCards component
+import { StatsCards } from "./StatsCards";
+
 export function Dashboard() {
-  const { logs, stats, isConnected } = useWebSocket();
+  const { logs, stats, isConnected, geoDataVersion } = useWebSocket();
   const [autoRefresh, setAutoRefresh] = useState(() => {
     const saved = localStorage.getItem('traefik-dashboard-auto-refresh');
     return saved === 'true';
@@ -171,7 +173,7 @@ export function Dashboard() {
 
       <TopListsCards stats={stats} />
 
-      <GeoMap stats={stats} />
+      <GeoMap stats={stats} geoDataVersion={geoDataVersion} />
 
       <Card>
         <CardHeader>

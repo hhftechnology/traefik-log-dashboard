@@ -133,6 +133,9 @@ func (c *WebSocketClient) sendInitialData() {
 
 	// Send initial geo stats
 	c.sendGeoStats()
+	
+	// Send geo processing status to show current state
+	c.sendGeoProcessingStatus()
 }
 
 func (c *WebSocketClient) handleMessage(msg WebSocketMessage) {
