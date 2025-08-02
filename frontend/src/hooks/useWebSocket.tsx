@@ -93,17 +93,151 @@ export interface Stats {
   topRouters: Array<{ router: string; count: number }>;
   topRequestAddrs: Array<{ addr: string; count: number }>;
   topRequestHosts: Array<{ host: string; count: number }>;
+  totalDataTransmitted: number;   // Total bytes transmitted
+  oldestLogTime: string;          // Oldest log timestamp
+  newestLogTime: string;          // Newest log timestamp
+  analysisPeriod: string;         // Human readable period
 }
 
 interface WebSocketMessage {
-  type: 'newLog' | 'logs' | 'stats';
+  type: 'newLog' | 'logs' | 'stats' | 'geoStats' | 'clear' | 'geoDataUpdated';
   data: any;
+  stats?: Stats; // Optional stats field for bundled updates
+}
+
+// Helper function to update stats with a new log entry (fallback for edge cases)
+function updateStatsWithNewLog(currentStats: Stats | null, newLog: LogEntry): Stats {
+  if (!currentStats) {
+    // Initialize basic stats if none exist
+    return {
+      totalRequests: 1,
+      statusCodes: { [newLog.status]: 1 },
+      services: { [newLog.serviceName]: 1 },
+      routers: { [newLog.routerName]: 1 },
+      methods: { [newLog.method]: 1 },
+      avgResponseTime: newLog.responseTime,
+      requests5xx: newLog.status >= 500 ? 1 : 0,
+      requests4xx: newLog.status >= 400 && newLog.status < 500 ? 1 : 0,
+      requests2xx: newLog.status >= 200 && newLog.status < 300 ? 1 : 0,
+      requestsPerSecond: 0,
+      topIPs: newLog.clientIP ? [{ ip: newLog.clientIP, count: 1 }] : [],
+      topCountries: newLog.country && newLog.countryCode ? [{ country: newLog.country, countryCode: newLog.countryCode, count: 1 }] : [],
+      topRouters: [{ router: newLog.routerName, count: 1 }],
+      topRequestAddrs: newLog.requestAddr ? [{ addr: newLog.requestAddr, count: 1 }] : [],
+      topRequestHosts: newLog.requestHost ? [{ host: newLog.requestHost, count: 1 }] : [],
+      totalDataTransmitted: typeof newLog.size === 'number' ? newLog.size : 0,
+      oldestLogTime: newLog.timestamp,
+      newestLogTime: newLog.timestamp,
+      analysisPeriod: '', // You can update this as needed elsewhere
+    };
+  }
+
+  // Create updated stats
+  const updatedStats: Stats = {
+    ...currentStats,
+    totalRequests: currentStats.totalRequests + 1,
+    statusCodes: {
+      ...currentStats.statusCodes,
+      [newLog.status]: (currentStats.statusCodes[newLog.status] || 0) + 1
+    },
+    services: {
+      ...currentStats.services,
+      [newLog.serviceName]: (currentStats.services[newLog.serviceName] || 0) + 1
+    },
+    routers: {
+      ...currentStats.routers,
+      [newLog.routerName]: (currentStats.routers[newLog.routerName] || 0) + 1
+    },
+    methods: {
+      ...currentStats.methods,
+      [newLog.method]: (currentStats.methods[newLog.method] || 0) + 1
+    }
+  };
+
+  // Update status code counters
+  if (newLog.status >= 500) {
+    updatedStats.requests5xx = currentStats.requests5xx + 1;
+  } else if (newLog.status >= 400) {
+    updatedStats.requests4xx = currentStats.requests4xx + 1;
+  } else if (newLog.status >= 200 && newLog.status < 300) {
+    updatedStats.requests2xx = currentStats.requests2xx + 1;
+  }
+
+  // Update average response time
+  updatedStats.avgResponseTime = (
+    (currentStats.avgResponseTime * currentStats.totalRequests + newLog.responseTime) / 
+    updatedStats.totalRequests
+  );
+
+  // Update top IPs
+  if (newLog.clientIP) {
+    const existingIP = updatedStats.topIPs.find(ip => ip.ip === newLog.clientIP);
+    if (existingIP) {
+      existingIP.count += 1;
+    } else {
+      updatedStats.topIPs.push({ ip: newLog.clientIP, count: 1 });
+    }
+    updatedStats.topIPs.sort((a, b) => b.count - a.count);
+    updatedStats.topIPs = updatedStats.topIPs.slice(0, 10); // Keep top 10
+  }
+
+  // Update top countries
+  if (newLog.country && newLog.countryCode) {
+    const existingCountry = updatedStats.topCountries.find(c => c.countryCode === newLog.countryCode);
+    if (existingCountry) {
+      existingCountry.count += 1;
+    } else {
+      updatedStats.topCountries.push({ 
+        country: newLog.country, 
+        countryCode: newLog.countryCode, 
+        count: 1 
+      });
+    }
+    updatedStats.topCountries.sort((a, b) => b.count - a.count);
+  }
+
+  // Update top routers
+  const existingRouter = updatedStats.topRouters.find(r => r.router === newLog.routerName);
+  if (existingRouter) {
+    existingRouter.count += 1;
+  } else {
+    updatedStats.topRouters.push({ router: newLog.routerName, count: 1 });
+  }
+  updatedStats.topRouters.sort((a, b) => b.count - a.count);
+  updatedStats.topRouters = updatedStats.topRouters.slice(0, 10);
+
+  // Update top request addresses
+  if (newLog.requestAddr) {
+    const existingAddr = updatedStats.topRequestAddrs.find(a => a.addr === newLog.requestAddr);
+    if (existingAddr) {
+      existingAddr.count += 1;
+    } else {
+      updatedStats.topRequestAddrs.push({ addr: newLog.requestAddr, count: 1 });
+    }
+    updatedStats.topRequestAddrs.sort((a, b) => b.count - a.count);
+    updatedStats.topRequestAddrs = updatedStats.topRequestAddrs.slice(0, 10);
+  }
+
+  // Update top request hosts
+  if (newLog.requestHost) {
+    const existingHost = updatedStats.topRequestHosts.find(h => h.host === newLog.requestHost);
+    if (existingHost) {
+      existingHost.count += 1;
+    } else {
+      updatedStats.topRequestHosts.push({ host: newLog.requestHost, count: 1 });
+    }
+    updatedStats.topRequestHosts.sort((a, b) => b.count - a.count);
+    updatedStats.topRequestHosts = updatedStats.topRequestHosts.slice(0, 10);
+  }
+
+  return updatedStats;
 }
 
 export function useWebSocket() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [geoDataVersion, setGeoDataVersion] = useState(0); // Track geo data updates
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -129,14 +263,57 @@ export function useWebSocket() {
         switch (message.type) {
           case 'newLog':
             setLogs(prev => [message.data, ...prev].slice(0, 1000));
-            break;
-          case 'logs':
-            if (Array.isArray(message.data.logs)) {
-              setLogs(prev => [...prev, ...message.data.logs]);
+            
+            // Use bundled stats if available (preferred), otherwise calculate locally
+            if (message.stats) {
+              console.log('Received real-time stats with new log:', message.stats);
+              setStats(message.stats);
+            } else {
+              // Fallback to local calculation if stats not bundled
+              console.log('No bundled stats, calculating locally');
+              setStats(prevStats => updateStatsWithNewLog(prevStats, message.data));
             }
             break;
+            
+          case 'logs':
+            if (Array.isArray(message.data)) {
+              setLogs(message.data);
+            } else if (Array.isArray(message.data.logs)) {
+              setLogs(message.data.logs);
+            }
+            break;
+            
           case 'stats':
             setStats(message.data);
+            break;
+            
+          case 'geoStats':
+            // Update geography data in stats
+            setStats(prevStats => {
+              if (!prevStats) return prevStats;
+              return {
+                ...prevStats,
+                topCountries: message.data.countries || prevStats.topCountries
+              };
+            });
+            // Increment geo data version to trigger re-renders
+            setGeoDataVersion(prev => prev + 1);
+            break;
+            
+          case 'geoDataUpdated':
+            // Handle immediate geo data updates from MaxMind reload
+            console.log('Received geo data update notification:', message.data);
+            // Force a geo data version increment to trigger map re-render
+            setGeoDataVersion(prev => prev + 1);
+            // Request fresh geo stats
+            sendMessage({ type: 'getGeoStats' });
+            sendMessage({ type: 'getStats' });
+            break;
+            
+          case 'clear':
+            setLogs([]);
+            setStats(null);
+            setGeoDataVersion(0);
             break;
         }
       };
@@ -169,6 +346,10 @@ export function useWebSocket() {
     sendMessage({ type: 'getStats' });
   }, [sendMessage]);
 
+  const refreshGeoData = useCallback(() => {
+    sendMessage({ type: 'refreshGeoData' });
+  }, [sendMessage]);
+
   useEffect(() => {
     connect();
 
@@ -186,7 +367,9 @@ export function useWebSocket() {
     logs,
     stats,
     isConnected,
+    geoDataVersion, // Expose geo data version for components that need to track updates
     requestLogs,
     requestStats,
+    refreshGeoData,
   };
 }

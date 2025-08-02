@@ -1,18 +1,28 @@
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { StatsCards } from "./StatsCards";
 import { LogTable } from "./LogTable";
 import { GeoMap } from "./GeoMap";
 import { TopListsCards } from "./TopListsCards";
 import { ThemeToggle } from "./ThemeToggle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, AlertCircle, Server, Github } from "lucide-react";
+import { Button } from "./ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Activity, AlertCircle, Server, Github, RefreshCw } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { Footer } from "./Footer";
-import { Button } from "./ui/button";
+import { useState, useEffect } from "react";
+
+// Import the enhanced StatsCards component
+import { StatsCards } from "./StatsCards";
 
 export function Dashboard() {
-  const { logs, stats, isConnected } = useWebSocket();
+  const { logs, stats, isConnected, geoDataVersion } = useWebSocket();
+  const [autoRefresh, setAutoRefresh] = useState(() => {
+    const saved = localStorage.getItem('traefik-dashboard-auto-refresh');
+    return saved === 'true';
+  });
+  const [refreshTimer, setRefreshTimer] = useState<NodeJS.Timeout | null>(null);
 
   const statusCodeData = stats ? Object.entries(stats.statusCodes).map(([code, count]) => ({
     name: code,
@@ -36,11 +46,46 @@ export function Dashboard() {
     return "#9ca3af";
   }
 
+  // Handle auto-refresh
+  useEffect(() => {
+    localStorage.setItem('traefik-dashboard-auto-refresh', autoRefresh.toString());
+    
+    if (autoRefresh) {
+      const timer = setInterval(() => {
+        window.location.reload();
+      }, 60000); // 1 minute
+      setRefreshTimer(timer);
+    } else if (refreshTimer) {
+      clearInterval(refreshTimer);
+      setRefreshTimer(null);
+    }
+
+    return () => {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+      }
+    };
+  }, [autoRefresh]);
+
   return (
     <div className="flex-1 space-y-4 p-8 pt-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Traefik Dashboard</h1>
         <div className="flex items-center gap-4">
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="auto-refresh" 
+              checked={autoRefresh}
+              onCheckedChange={(checked) => setAutoRefresh(checked as boolean)}
+            />
+            <Label 
+              htmlFor="auto-refresh" 
+              className="text-sm font-normal cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Auto-refresh (1min)
+            </Label>
+          </div>
           <a href="https://github.com/hhftechnology" target="_blank" rel="noopener noreferrer">
             <Button variant="outline" size="icon">
               <Github className="h-4 w-4 text-muted-foreground" />
@@ -128,7 +173,7 @@ export function Dashboard() {
 
       <TopListsCards stats={stats} />
 
-      <GeoMap stats={stats} />
+      <GeoMap stats={stats} geoDataVersion={geoDataVersion} />
 
       <Card>
         <CardHeader>

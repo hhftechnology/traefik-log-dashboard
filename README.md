@@ -153,6 +153,267 @@ The `docker-compose.yml` file supports several deployment scenarios:
     volumes:
       - traefik-logs:/logs:ro
     ```
+    
+# MaxMind GeoIP2 Integration
+
+Our application now supports offline IP geolocation using MaxMind's GeoIP2 databases, providing faster and more reliable geolocation without relying on external APIs.
+
+## Overview
+
+The MaxMind integration provides:
+- **Offline geolocation** - No internet required for IP lookups
+- **Better performance** - Local database queries are much faster
+- **Rate limit free** - No API rate limits or quotas
+- **Privacy** - IP addresses are not sent to external services
+- **Reliability** - No dependency on external API availability
+- **Fallback support** - Can fallback to online APIs if needed
+
+## Quick Start
+
+### 1. Get MaxMind License Key
+
+1. Sign up for a free MaxMind account: https://www.maxmind.com/en/geolite2/signup
+2. Go to your account page and generate a license key
+3. Set the license key as an environment variable:
+   ```bash
+   export MAXMIND_LICENSE_KEY=your_license_key_here
+   ```
+
+### 2. Download Database
+
+```bash
+# Download the GeoLite2-City database
+make maxmind-download
+
+# Or download the Country database (smaller, less detailed)
+make maxmind-download-country
+```
+
+### 3. Run with MaxMind Enabled
+
+```bash
+# Using make
+USE_MAXMIND=true MAXMIND_DB_PATH=maxmind/GeoLite2-City.mmdb make run
+
+# Or directly
+USE_MAXMIND=true MAXMIND_DB_PATH=maxmind/GeoLite2-City.mmdb ./main
+```
+
+### 4. Run with Docker
+
+```bash
+# Build and run with MaxMind support
+make docker
+make docker-run
+
+# Or manually
+docker run -p 3001:3001 \
+  -v /logs:/logs \
+  -v $(PWD)/maxmind:/maxmind \
+  -e USE_MAXMIND=true \
+  -e MAXMIND_DB_PATH=/maxmind/GeoLite2-City.mmdb \
+  traefik-log-dashboard-backend
+```
+
+## Environment Variables
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `USE_MAXMIND` | Enable MaxMind database | `false` | `true` |
+| `MAXMIND_DB_PATH` | Path to MaxMind database file | `/maxmind/GeoLite2-City.mmdb` | `./maxmind/GeoLite2-City.mmdb` |
+| `MAXMIND_FALLBACK_ONLINE` | Fallback to online APIs if MaxMind fails | `true` | `false` |
+
+## Database Types
+
+### GeoLite2-City
+- **Size**: ~70MB
+- **Data**: Country, region, city, coordinates, timezone
+- **Accuracy**: City-level
+- **Best for**: Detailed geolocation with city information
+
+### GeoLite2-Country  
+- **Size**: ~6MB
+- **Data**: Country and coordinates only
+- **Accuracy**: Country-level
+- **Best for**: Basic geolocation, smaller memory footprint
+
+## API Endpoints
+
+### Get MaxMind Configuration
+```http
+GET /api/maxmind/config
+```
+
+Response:
+```json
+{
+  "enabled": true,
+  "databasePath": "/maxmind/GeoLite2-City.mmdb",
+  "fallbackToOnline": true,
+  "databaseLoaded": true,
+  "databaseError": ""
+}
+```
+
+### Reload MaxMind Database
+```http
+POST /api/maxmind/reload
+```
+
+Useful when you've updated the database file.
+
+### Test MaxMind Database
+```http
+POST /api/maxmind/test
+Content-Type: application/json
+
+{
+  "testIP": "8.8.8.8"
+}
+```
+
+Response:
+```json
+{
+  "success": true,
+  "testIP": "8.8.8.8",
+  "geoData": {
+    "country": "United States",
+    "city": "Mountain View",
+    "countryCode": "US",
+    "lat": 37.4223,
+    "lon": -122.084,
+    "source": "maxmind"
+  }
+}
+```
+
+## How It Works
+
+### Lookup Priority
+1. **Cache**: Check if IP is already cached
+2. **MaxMind**: Query local MaxMind database (if enabled)
+3. **Online APIs**: Fallback to online services (if fallback enabled)
+4. **Cache failures**: Cache failed lookups to avoid repeated attempts
+
+### Source Tracking
+Each geolocation result includes a `source` field indicating where the data came from:
+- `maxmind` - MaxMind database
+- `online_primary` - Primary online API (ip-api.com)
+- `online_fallback1` - Secondary online API (ipapi.co)
+- `online_fallback2` - Tertiary online API (ipinfo.io)
+- `cached` - Previously cached result
+- `private` - Private IP address
+- `failed` - All lookup methods failed
+
+## Performance Comparison
+
+| Method | Latency | Rate Limits | Privacy | Offline |
+|--------|---------|-------------|---------|---------|
+| MaxMind | <1ms | None | Full | Yes |
+| Online APIs | 50-200ms | Yes (45/min) | Partial | No |
+
+## Deployment Scenarios
+
+### Production with MaxMind Only
+```bash
+# Disable fallback for maximum privacy
+docker run -p 3001:3001 \
+  -v /logs:/logs \
+  -v /path/to/maxmind:/maxmind \
+  -e USE_MAXMIND=true \
+  -e MAXMIND_FALLBACK_ONLINE=false \
+  traefik-log-dashboard-backend
+```
+
+### Hybrid Mode (Recommended)
+```bash
+# Use MaxMind with online fallback
+docker run -p 3001:3001 \
+  -v /logs:/logs \
+  -v /path/to/maxmind:/maxmind \
+  -e USE_MAXMIND=true \
+  -e MAXMIND_FALLBACK_ONLINE=true \
+  traefik-log-dashboard-backend
+```
+
+### Online Only (Original behavior)
+```bash
+# Disable MaxMind completely
+docker run -p 3001:3001 \
+  -v /logs:/logs \
+  -e USE_MAXMIND=false \
+  traefik-log-dashboard-backend
+```
+
+## Database Updates
+
+MaxMind releases updated databases regularly. To update:
+
+1. Download the latest database:
+   ```bash
+   make maxmind-download
+   ```
+
+2. Reload the database (without restarting the application):
+   ```bash
+   curl -X POST http://localhost:3001/api/maxmind/reload
+   ```
+
+## Troubleshooting
+
+### Database Not Loading
+- Check file path: `ls -la /path/to/maxmind/GeoLite2-City.mmdb`
+- Check permissions: Database file must be readable by the application
+- Check logs for specific error messages
+
+### Poor Geolocation Accuracy
+- Ensure you're using the City database for detailed location data
+- Update to the latest database version
+- Some IP ranges may have limited location data
+
+### Memory Usage
+- GeoLite2-City: ~100MB RAM usage
+- GeoLite2-Country: ~20MB RAM usage
+- Consider using Country database for memory-constrained environments
+
+### Testing MaxMind Database
+```bash
+# Test the database locally
+make maxmind-test
+
+# Or manually
+curl -X POST http://localhost:3001/api/maxmind/test \
+  -H "Content-Type: application/json" \
+  -d '{"testIP": "8.8.8.8"}'
+```
+
+## License and Terms
+
+- **GeoLite2 Database**: Free with attribution required
+- **Commercial Use**: Consider MaxMind's paid GeoIP2 databases for commercial applications
+- **Attribution**: Include MaxMind attribution in your application if required
+- **Updates**: Free databases are updated weekly, paid databases more frequently
+
+## Security Considerations
+
+- Database files should be stored securely and backed up
+- Consider encrypting database files at rest
+- Regularly update databases for security patches
+- Monitor access to the database files
+- In high-security environments, disable online fallback
+
+## Support
+
+For MaxMind-specific issues:
+- MaxMind Documentation: https://dev.maxmind.com/geoip/geolite2-free-geolocation-data
+- MaxMind Support: https://support.maxmind.com/
+
+For application-specific issues:
+- Check application logs
+- Use the test endpoint to verify configuration
+- Check the configuration endpoint for database status
+
 
 ## Architecture
 

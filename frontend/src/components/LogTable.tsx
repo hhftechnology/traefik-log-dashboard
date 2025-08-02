@@ -36,17 +36,18 @@ interface LogTableProps {
 type SortColumn = keyof LogEntry;
 type SortDirection = 'asc' | 'desc' | null;
 
-export function LogTable({ logs: initialLogs }: LogTableProps) {
+export function LogTable({ logs: realtimeLogs }: LogTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
   const [totalLogs, setTotalLogs] = useState(0);
-  const [logs, setLogs] = useState<LogEntry[]>(initialLogs);
+  const [apiLogs, setApiLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [hideUnknown, setHideUnknown] = useState(false);
   const [hidePrivateIPs, setHidePrivateIPs] = useState(false);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
+  const [pathTruncateLength, setPathTruncateLength] = useState(50); // Configurable path length
 
   // Column visibility state
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
@@ -203,6 +204,12 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
     return (Object.keys(columnVisibility) as Array<keyof LogEntry>).filter(key => columnVisibility[key]);
   }, [columnVisibility]);
 
+  // Determine if we should use real-time logs or API logs
+  const shouldUseRealtimeLogs = currentPage === 1 && !hideUnknown && !hidePrivateIPs;
+
+  // Choose the appropriate log source
+  const displayLogs = shouldUseRealtimeLogs ? realtimeLogs.slice(0, pageSize) : apiLogs;
+
   const fetchLogs = async (page: number, limit: number) => {
     setLoading(true);
     try {
@@ -214,7 +221,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
           hidePrivateIPs
         }
       });
-      setLogs(response.data.logs);
+      setApiLogs(response.data.logs);
       setTotalPages(response.data.totalPages);
       setTotalLogs(response.data.total);
     } catch (error) {
@@ -224,10 +231,22 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
     }
   };
 
+  // Update total logs count for real-time mode
   useEffect(() => {
-    fetchLogs(currentPage, pageSize);
-  }, [currentPage, pageSize, hideUnknown, hidePrivateIPs]);
+    if (shouldUseRealtimeLogs) {
+      setTotalLogs(realtimeLogs.length);
+      setTotalPages(Math.ceil(realtimeLogs.length / pageSize));
+    }
+  }, [realtimeLogs.length, pageSize, shouldUseRealtimeLogs]);
 
+  // Fetch logs when not using real-time mode
+  useEffect(() => {
+    if (!shouldUseRealtimeLogs) {
+      fetchLogs(currentPage, pageSize);
+    }
+  }, [currentPage, pageSize, hideUnknown, hidePrivateIPs, shouldUseRealtimeLogs]);
+
+  // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [hideUnknown, pageSize, hidePrivateIPs]);
@@ -259,7 +278,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
     return <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />;
   };
 
-  const sortedLogs = [...logs].sort((a, b) => {
+  const sortedLogs = [...displayLogs].sort((a, b) => {
     if (!sortColumn || !sortDirection) return 0;
 
     let aValue = a[sortColumn];
@@ -341,7 +360,23 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
       case 'method':
         return <Badge variant={getMethodBadgeVariant(log.method)}>{log.method}</Badge>;
       case 'path':
-        return <span className="max-w-xs truncate font-mono text-xs">{log.path}</span>;
+        const truncatedPath = log.path.length > pathTruncateLength 
+          ? `${log.path.substring(0, pathTruncateLength)}...` 
+          : log.path;
+        return (
+          <span 
+            className="max-w-xs font-mono text-xs cursor-help hover:text-blue-600 dark:hover:text-blue-400 transition-colors" 
+            title={log.path}
+            style={{ 
+              display: 'block',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}
+          >
+            {truncatedPath}
+          </span>
+        );
       case 'status':
         return <Badge variant={getStatusBadgeVariant(log.status)}>{log.status}</Badge>;
       case 'responseTime':
@@ -394,9 +429,29 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
               Hide private IPs
             </Label>
           </div>
+          {shouldUseRealtimeLogs && (
+            <Badge variant="secondary" className="text-xs">
+              Real-time
+            </Badge>
+          )}
         </div>
         
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Path length:</span>
+            <Select value={pathTruncateLength.toString()} onValueChange={(value) => setPathTruncateLength(parseInt(value))}>
+              <SelectTrigger className="w-20">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">30</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="80">80</SelectItem>
+                <SelectItem value="120">120</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
@@ -459,7 +514,7 @@ export function LogTable({ logs: initialLogs }: LogTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading ? (
+            {loading && !shouldUseRealtimeLogs ? (
               <TableRow>
                 <TableCell colSpan={visibleColumns.length} className="h-24 text-center text-muted-foreground">
                   Loading logs...

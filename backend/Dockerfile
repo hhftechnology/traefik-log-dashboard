@@ -1,34 +1,46 @@
 # Build stage
-FROM node:22-alpine AS builder
+FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install
+# Install build dependencies
+RUN apk add --no-cache git
 
-COPY src ./src
+# Copy go mod files
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY *.go ./
+
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
 # Production stage
-FROM node:22-alpine
+FROM alpine:latest
 
-WORKDIR /app
+RUN apk --no-cache add ca-certificates
 
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/src ./src
+WORKDIR /root/
 
-# Create logs directory
-RUN mkdir -p /logs
+# Copy the binary from builder
+COPY --from=builder /app/main .
+
+# Create necessary directories
+RUN mkdir -p /logs /maxmind
 
 # Expose port
 EXPOSE 3001
 
 # Set default environment variables
-ENV NODE_ENV=production
 ENV PORT=3001
-# Support multiple log files separated by comma
-# Example: TRAEFIK_LOG_FILE=/logs/traefik.log,/logs/access.log,/logs/
 ENV TRAEFIK_LOG_FILE=/logs/traefik.log
+ENV USE_MAXMIND=false
+ENV MAXMIND_DB_PATH=/maxmind/GeoLite2-City.mmdb
+ENV MAXMIND_FALLBACK_ONLINE=true
+
+# Add MaxMind database volume
+VOLUME ["/maxmind"]
 
 # Run the application
-CMD ["node", "src/index.js"]
+CMD ["./main"]
