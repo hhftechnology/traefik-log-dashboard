@@ -254,6 +254,7 @@ func (lp *LogParser) setupTailForFile(filePath string) error {
 		Follow:    true,
 		ReOpen:    true,
 		MustExist: false,
+		Poll:      true,  // Use polling to detect file changes
 		Location:  &tail.SeekInfo{Offset: 0, Whence: 2}, // Start at end of file
 	})
 	if err != nil {
@@ -266,8 +267,13 @@ func (lp *LogParser) setupTailForFile(filePath string) error {
 
 	go func() {
 		for line := range t.Lines {
+			if line.Err != nil {
+				log.Printf("Error reading line from %s: %v", filePath, line.Err)
+				continue
+			}
 			lp.parseLine(line.Text, true)
 		}
+		log.Printf("Tail stopped for file: %s", filePath)
 	}()
 
 	return nil
@@ -392,6 +398,43 @@ func (lp *LogParser) parseLine(line string, emit bool) {
 
 	if emit {
 		lp.notifyListeners(log)
+	}
+}
+
+func (lp *LogParser) ClearLogs() {
+	lp.mu.Lock()
+	defer lp.mu.Unlock()
+
+	log.Println("Clearing all logs and stats")
+	
+	// Clear logs
+	lp.logs = make([]LogEntry, 0)
+	
+	// Reset stats
+	lp.stats = Stats{
+		StatusCodes:     make(map[int]int),
+		Services:        make(map[string]int),
+		Routers:         make(map[string]int),
+		Methods:         make(map[string]int),
+		Countries:       make(map[string]int),
+	}
+	
+	// Reset counters
+	lp.topIPs = make(map[string]int)
+	lp.topRouters = make(map[string]int)
+	lp.topRequestAddrs = make(map[string]int)
+	lp.topRequestHosts = make(map[string]int)
+	lp.requestsInLastSecond = 0
+	
+	// Clear geo processing queue
+	lp.geoProcessingQueue = make([]LogEntry, 0)
+	
+	// Notify listeners of the clear
+	for _, listener := range lp.listeners {
+		select {
+		case listener <- LogEntry{ID: "CLEAR"}:
+		default:
+		}
 	}
 }
 

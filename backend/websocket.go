@@ -195,6 +195,22 @@ func (c *WebSocketClient) sendGeoProcessingStatus() {
 }
 
 func (c *WebSocketClient) sendNewLog(log LogEntry) {
+	// Check if this is a clear signal
+	if log.ID == "CLEAR" {
+		c.sendMessage(WebSocketMessage{
+			Type: "clear",
+			Data: nil,
+		})
+		// Also send fresh stats and logs after clear
+		c.sendStats()
+		result := c.logParser.GetLogs(LogsParams{Page: 1, Limit: 50})
+		c.sendMessage(WebSocketMessage{
+			Type: "logs",
+			Data: result.Logs,
+		})
+		return
+	}
+
 	c.sendMessage(WebSocketMessage{
 		Type: "newLog",
 		Data: log,
