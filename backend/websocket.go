@@ -12,6 +12,13 @@ type WebSocketMessage struct {
 	Type   string      `json:"type"`
 	Data   interface{} `json:"data,omitempty"`
 	Params interface{} `json:"params,omitempty"`
+	Stats  *Stats      `json:"stats,omitempty"`  // Add stats field for bundled updates
+}
+
+// NewLogWithStats represents a new log entry bundled with current stats
+type NewLogWithStats struct {
+	Log   LogEntry `json:"log"`
+	Stats Stats    `json:"stats"`
 }
 
 type WebSocketClient struct {
@@ -63,8 +70,9 @@ func (c *WebSocketClient) ReadPump() {
 
 func (c *WebSocketClient) WritePump() {
 	ticker := time.NewTicker(54 * time.Second)
-	statsInterval := time.NewTicker(5 * time.Second)
-	geoStatsInterval := time.NewTicker(10 * time.Second)
+	// Reduce stats interval since we're now sending stats with each log
+	statsInterval := time.NewTicker(10 * time.Second)
+	geoStatsInterval := time.NewTicker(15 * time.Second)
 	
 	defer func() {
 		ticker.Stop()
@@ -93,9 +101,10 @@ func (c *WebSocketClient) WritePump() {
 			}
 
 		case log := <-c.logChan:
-			c.sendNewLog(log)
+			c.sendNewLogWithStats(log)
 
 		case <-statsInterval.C:
+			// Send standalone stats update (less frequent now)
 			c.sendStats()
 
 		case <-geoStatsInterval.C:
@@ -194,7 +203,8 @@ func (c *WebSocketClient) sendGeoProcessingStatus() {
 	})
 }
 
-func (c *WebSocketClient) sendNewLog(log LogEntry) {
+// Updated function to send new log with current stats
+func (c *WebSocketClient) sendNewLogWithStats(log LogEntry) {
 	// Check if this is a clear signal
 	if log.ID == "CLEAR" {
 		c.sendMessage(WebSocketMessage{
@@ -211,8 +221,21 @@ func (c *WebSocketClient) sendNewLog(log LogEntry) {
 		return
 	}
 
+	// Get current stats - this will include the impact of the new log
+	// since stats are updated in parseLine before notifying listeners
+	currentStats := c.logParser.GetStats()
+
+	// Send new log message with bundled stats for real-time updates
 	c.sendMessage(WebSocketMessage{
-		Type: "newLog",
-		Data: log,
+		Type:  "newLog",
+		Data:  log,
+		Stats: &currentStats,  // Include current stats with the log
 	})
+}
+
+// Keep the old function for backward compatibility, but mark as deprecated
+func (c *WebSocketClient) sendNewLog(log LogEntry) {
+	// This function is now deprecated in favor of sendNewLogWithStats
+	// Redirect to the new function
+	c.sendNewLogWithStats(log)
 }
