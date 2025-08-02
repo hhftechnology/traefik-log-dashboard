@@ -26,8 +26,8 @@ WORKDIR /root/
 # Copy the binary from builder
 COPY --from=builder /app/main .
 
-# Create logs directory
-RUN mkdir -p /logs
+# Create necessary directories
+RUN mkdir -p /logs /maxmind
 
 # Expose port
 EXPOSE 3001
@@ -35,6 +35,12 @@ EXPOSE 3001
 # Set default environment variables
 ENV PORT=3001
 ENV TRAEFIK_LOG_FILE=/logs/traefik.log
+ENV USE_MAXMIND=false
+ENV MAXMIND_DB_PATH=/maxmind/GeoLite2-City.mmdb
+ENV MAXMIND_FALLBACK_ONLINE=true
+
+# Add MaxMind database volume
+VOLUME ["/maxmind"]
 
 # Run the application
 CMD ["./main"]

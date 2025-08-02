@@ -29,6 +29,9 @@ func main() {
 	// Initialize log parser
 	logParser = NewLogParser()
 
+	// Setup graceful shutdown for MaxMind database
+	defer CloseMaxMindDatabase()
+
 	// Setup Gin router
 	r := gin.Default()
 
@@ -50,6 +53,13 @@ func main() {
 	r.GET("/api/geo-processing-status", getGeoProcessingStatus)
 	r.POST("/api/set-log-file", setLogFile)
 	r.POST("/api/set-log-files", setLogFiles)
+	
+	// MaxMind API Routes
+	r.GET("/api/maxmind/config", getMaxMindConfig)
+	r.POST("/api/maxmind/reload", reloadMaxMindDatabase)
+	r.POST("/api/maxmind/test", testMaxMindDatabase)
+	
+	// Health check
 	r.GET("/health", healthCheck)
 
 	// WebSocket endpoint
@@ -79,6 +89,8 @@ func main() {
 	}
 
 	log.Printf("Server running on port %s", port)
+	log.Printf("MaxMind configuration: %+v", GetMaxMindConfig())
+	
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
@@ -145,6 +157,59 @@ func getGeoProcessingStatus(c *gin.Context) {
 		"retryQueueLength":       cacheStats.RetryQueueLength,
 		"totalCountries":         len(stats.Countries),
 		"isProcessing":           logParser.IsProcessingGeo(),
+		"maxmindConfig":          cacheStats.MaxMindConfig,
+	})
+}
+
+func getMaxMindConfig(c *gin.Context) {
+	config := GetMaxMindConfig()
+	c.JSON(http.StatusOK, config)
+}
+
+func reloadMaxMindDatabase(c *gin.Context) {
+	if err := ReloadMaxMindDatabase(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Clear geo cache to ensure fresh lookups
+	ClearGeoCache()
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "MaxMind database reloaded successfully",
+		"config":  GetMaxMindConfig(),
+	})
+}
+
+func testMaxMindDatabase(c *gin.Context) {
+	var req struct {
+		TestIP string `json:"testIP"`
+	}
+
+	// Set default test IP if none provided
+	req.TestIP = "8.8.8.8"
+	
+	if err := c.ShouldBindJSON(&req); err != nil {
+		// Use default IP if JSON parsing fails
+		req.TestIP = "8.8.8.8"
+	}
+
+	if req.TestIP == "" {
+		req.TestIP = "8.8.8.8"
+	}
+
+	// Test the geolocation
+	geoData := GetGeoLocation(req.TestIP)
+	
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"testIP":    req.TestIP,
+		"geoData":   geoData,
+		"config":    GetMaxMindConfig(),
 	})
 }
 
@@ -191,7 +256,21 @@ func setLogFiles(c *gin.Context) {
 }
 
 func healthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	config := GetMaxMindConfig()
+	
+	health := gin.H{
+		"status":    "ok",
+		"maxmind": gin.H{
+			"enabled":        config.Enabled,
+			"databaseLoaded": config.DatabaseLoaded,
+		},
+	}
+	
+	if config.DatabaseError != "" {
+		health["maxmind"].(gin.H)["error"] = config.DatabaseError
+	}
+	
+	c.JSON(http.StatusOK, health)
 }
 
 func handleWebSocket(c *gin.Context) {

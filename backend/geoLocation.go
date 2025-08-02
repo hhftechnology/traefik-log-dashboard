@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/oschwald/geoip2-golang"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -20,6 +23,11 @@ var (
 	retryQueue        []string
 	retryQueueMutex   sync.Mutex
 	countryNameMap    map[string]string
+	maxmindDB         *geoip2.Reader
+	maxmindMutex      sync.RWMutex
+	useMaxMind        bool
+	maxmindPath       string
+	fallbackToOnline  bool
 )
 
 const (
@@ -37,6 +45,7 @@ type GeoData struct {
 	Timezone    string  `json:"timezone,omitempty"`
 	ISP         string  `json:"isp,omitempty"`
 	Org         string  `json:"org,omitempty"`
+	Source      string  `json:"source,omitempty"` // "maxmind", "online", or "cached"
 }
 
 type IPAPIResponse struct {
@@ -79,12 +88,158 @@ type IPInfoResponse struct {
 	Timezone string `json:"timezone"`
 }
 
+type MaxMindConfig struct {
+	Enabled           bool   `json:"enabled"`
+	DatabasePath      string `json:"databasePath"`
+	FallbackToOnline  bool   `json:"fallbackToOnline"`
+	DatabaseLoaded    bool   `json:"databaseLoaded"`
+	DatabaseError     string `json:"databaseError,omitempty"`
+}
+
 func init() {
 	geoCache = cache.New(7*24*time.Hour, 24*time.Hour) // 7 days cache, 24 hour cleanup
 	lastRequestTime = time.Now()
 	
 	// Initialize country name map
 	initCountryNames()
+	
+	// Initialize MaxMind configuration from environment variables
+	initMaxMind()
+}
+
+func initMaxMind() {
+	maxmindPath = os.Getenv("MAXMIND_DB_PATH")
+	useMaxMind = os.Getenv("USE_MAXMIND") == "true"
+	fallbackToOnline = os.Getenv("MAXMIND_FALLBACK_ONLINE") != "false" // Default to true
+	
+	if useMaxMind && maxmindPath != "" {
+		if err := loadMaxMindDatabase(maxmindPath); err != nil {
+			log.Printf("Failed to load MaxMind database: %v", err)
+			if !fallbackToOnline {
+				log.Printf("MaxMind database failed to load and fallback is disabled")
+			}
+		}
+	}
+}
+
+func loadMaxMindDatabase(dbPath string) error {
+	maxmindMutex.Lock()
+	defer maxmindMutex.Unlock()
+	
+	// Close existing database if open
+	if maxmindDB != nil {
+		maxmindDB.Close()
+		maxmindDB = nil
+	}
+	
+	// Check if file exists
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return fmt.Errorf("MaxMind database file not found: %s", dbPath)
+	}
+	
+	// Open MaxMind database
+	db, err := geoip2.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open MaxMind database: %v", err)
+	}
+	
+	maxmindDB = db
+	log.Printf("MaxMind database loaded successfully from: %s", dbPath)
+	return nil
+}
+
+func ReloadMaxMindDatabase() error {
+	if maxmindPath == "" {
+		return fmt.Errorf("no MaxMind database path configured")
+	}
+	return loadMaxMindDatabase(maxmindPath)
+}
+
+func GetMaxMindConfig() MaxMindConfig {
+	maxmindMutex.RLock()
+	defer maxmindMutex.RUnlock()
+	
+	config := MaxMindConfig{
+		Enabled:          useMaxMind,
+		DatabasePath:     maxmindPath,
+		FallbackToOnline: fallbackToOnline,
+		DatabaseLoaded:   maxmindDB != nil,
+	}
+	
+	// Test database if loaded
+	if maxmindDB != nil {
+		testIP := net.ParseIP("8.8.8.8")
+		if testIP != nil {
+			if _, err := maxmindDB.City(testIP); err != nil {
+				config.DatabaseError = err.Error()
+			}
+		}
+	}
+	
+	return config
+}
+
+func getGeoFromMaxMind(ip string) *GeoData {
+	maxmindMutex.RLock()
+	defer maxmindMutex.RUnlock()
+	
+	if maxmindDB == nil {
+		return nil
+	}
+	
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		return nil
+	}
+	
+	record, err := maxmindDB.City(parsedIP)
+	if err != nil {
+		log.Printf("MaxMind lookup failed for IP %s: %v", ip, err)
+		return nil
+	}
+	
+	country := "Unknown"
+	countryCode := "XX"
+	city := "Unknown"
+	region := ""
+	timezone := ""
+	
+	if len(record.Country.Names) > 0 {
+		if name, ok := record.Country.Names["en"]; ok {
+			country = name
+		}
+	}
+	
+	if record.Country.IsoCode != "" {
+		countryCode = record.Country.IsoCode
+	}
+	
+	if len(record.City.Names) > 0 {
+		if name, ok := record.City.Names["en"]; ok {
+			city = name
+		}
+	}
+	
+	if len(record.Subdivisions) > 0 && len(record.Subdivisions[0].Names) > 0 {
+		if name, ok := record.Subdivisions[0].Names["en"]; ok {
+			region = name
+		}
+	}
+	
+	if record.Location.TimeZone != "" {
+		timezone = record.Location.TimeZone
+	}
+	
+	return &GeoData{
+		Country:     country,
+		City:        city,
+		CountryCode: countryCode,
+		Lat:         record.Location.Latitude,
+		Lon:         record.Location.Longitude,
+		Region:      region,
+		Timezone:    timezone,
+		Source:      "maxmind",
+	}
 }
 
 func GetGeoLocation(ip string) *GeoData {
@@ -96,17 +251,44 @@ func GetGeoLocation(ip string) *GeoData {
 			CountryCode: "XX",
 			Lat:         0,
 			Lon:         0,
+			Source:      "private",
 		}
 	}
 
 	// Check cache first
 	if cached, found := geoCache.Get(ip); found {
 		if geoData, ok := cached.(*GeoData); ok {
+			// Add source if not set (for backward compatibility)
+			if geoData.Source == "" {
+				geoData.Source = "cached"
+			}
 			return geoData
 		}
 	}
 
-	// Rate limiting check
+	// Try MaxMind first if enabled
+	if useMaxMind {
+		if geoData := getGeoFromMaxMind(ip); geoData != nil {
+			geoCache.Set(ip, geoData, cache.DefaultExpiration)
+			return geoData
+		} else if !fallbackToOnline {
+			// MaxMind failed and no fallback allowed
+			failedData := &GeoData{
+				Country:     "Unknown",
+				City:        "Unknown",
+				CountryCode: "XX",
+				Lat:         0,
+				Lon:         0,
+				Source:      "maxmind_failed",
+			}
+			geoCache.Set(ip, failedData, 1*time.Hour)
+			return failedData
+		}
+		// If MaxMind failed but fallback is enabled, continue to online APIs
+		log.Printf("MaxMind lookup failed for %s, falling back to online APIs", ip)
+	}
+
+	// Rate limiting check for online APIs
 	rateLimitMutex.Lock()
 	now := time.Now()
 	if now.Sub(lastRequestTime) > RATE_LIMIT_WINDOW {
@@ -124,12 +306,13 @@ func GetGeoLocation(ip string) *GeoData {
 			CountryCode: "XX",
 			Lat:         0,
 			Lon:         0,
+			Source:      "rate_limited",
 		}
 	}
 	requestCount++
 	rateLimitMutex.Unlock()
 
-	// Try primary service
+	// Try primary online service
 	client := &http.Client{Timeout: 5 * time.Second}
 	url := fmt.Sprintf("http://ip-api.com/json/%s?fields=status,message,country,countryCode,region,regionName,city,lat,lon,timezone,isp,org,as,query", ip)
 	
@@ -149,6 +332,7 @@ func GetGeoLocation(ip string) *GeoData {
 				Timezone:    apiResp.Timezone,
 				ISP:         apiResp.ISP,
 				Org:         apiResp.Org,
+				Source:      "online_primary",
 			}
 			
 			if geoData.Country == "" {
@@ -192,6 +376,7 @@ func tryFallbackService(ip string) *GeoData {
 				Region:      apiResp.Region,
 				Timezone:    apiResp.Timezone,
 				ISP:         apiResp.Org,
+				Source:      "online_fallback1",
 			}
 			
 			if geoData.Country == "" {
@@ -231,6 +416,7 @@ func tryFallbackService(ip string) *GeoData {
 				Region:      apiResp.Region,
 				Timezone:    apiResp.Timezone,
 				ISP:         apiResp.Org,
+				Source:      "online_fallback2",
 			}
 			
 			if geoData.Country == "" {
@@ -256,6 +442,7 @@ func tryFallbackService(ip string) *GeoData {
 		CountryCode: "XX",
 		Lat:         0,
 		Lon:         0,
+		Source:      "failed",
 	}
 	geoCache.Set(ip, failedData, 1*time.Hour) // Cache failures for 1 hour
 	return failedData
@@ -321,6 +508,7 @@ type GeoCacheStats struct {
 	Keys             int            `json:"keys"`
 	Stats            map[string]int `json:"stats"`
 	RetryQueueLength int            `json:"retryQueueLength"`
+	MaxMindConfig    MaxMindConfig  `json:"maxmindConfig"`
 }
 
 func GetGeoCacheStats() GeoCacheStats {
@@ -334,11 +522,23 @@ func GetGeoCacheStats() GeoCacheStats {
 			"items": geoCache.ItemCount(),
 		},
 		RetryQueueLength: queueLen,
+		MaxMindConfig:    GetMaxMindConfig(),
 	}
 }
 
 func ClearGeoCache() {
 	geoCache.Flush()
+}
+
+func CloseMaxMindDatabase() {
+	maxmindMutex.Lock()
+	defer maxmindMutex.Unlock()
+	
+	if maxmindDB != nil {
+		maxmindDB.Close()
+		maxmindDB = nil
+		log.Println("MaxMind database closed")
+	}
 }
 
 func init() {
@@ -352,6 +552,7 @@ func init() {
 		}
 	}()
 }
+
 
 func initCountryNames() {
 countryNameMap = map[string]string{
