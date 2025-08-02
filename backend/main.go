@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -19,8 +21,11 @@ var (
 		CheckOrigin: func(r *http.Request) bool {
 			return true // Allow connections from any origin
 		},
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
 	}
-	wsClients = make(map[*WebSocketClient]bool) // Track WebSocket clients
+	wsClients    = make(map[*WebSocketClient]bool) // Track WebSocket clients
+	wsClientsMux = sync.RWMutex{}                  // Protect client map
 )
 
 func main() {
@@ -32,6 +37,9 @@ func main() {
 
 	// Setup graceful shutdown for MaxMind database
 	defer CloseMaxMindDatabase()
+
+	// Start WebSocket health monitoring
+	startWebSocketHealthMonitor()
 
 	// Setup Gin router
 	r := gin.Default()
@@ -60,7 +68,10 @@ func main() {
 	r.POST("/api/maxmind/reload", reloadMaxMindDatabase)
 	r.POST("/api/maxmind/test", testMaxMindDatabase)
 	
-	// Health check
+	// WebSocket status endpoint for debugging
+	r.GET("/api/websocket/status", getWebSocketStatus)
+	
+	// Health check with WebSocket status
 	r.GET("/health", healthCheck)
 
 	// WebSocket endpoint
@@ -91,34 +102,105 @@ func main() {
 
 	log.Printf("Server running on port %s", port)
 	log.Printf("MaxMind configuration: %+v", GetMaxMindConfig())
+	log.Printf("WebSocket clients tracking enabled")
 	
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
 }
 
-// Add client tracking functions
+// WebSocket Client Management Functions
 func addWSClient(client *WebSocketClient) {
+	wsClientsMux.Lock()
+	defer wsClientsMux.Unlock()
 	wsClients[client] = true
+	log.Printf("[WebSocket] Total clients connected: %d", len(wsClients))
 }
 
 func removeWSClient(client *WebSocketClient) {
+	wsClientsMux.Lock()
+	defer wsClientsMux.Unlock()
 	delete(wsClients, client)
+	log.Printf("[WebSocket] Client removed. Total clients: %d", len(wsClients))
+}
+
+func getWSClientCount() int {
+	wsClientsMux.RLock()
+	defer wsClientsMux.RUnlock()
+	return len(wsClients)
+}
+
+func getWSClientInfo() []map[string]interface{} {
+	wsClientsMux.RLock()
+	defer wsClientsMux.RUnlock()
+	
+	var clients []map[string]interface{}
+	for client := range wsClients {
+		if client.IsHealthy() {
+			clients = append(clients, client.GetInfo())
+		}
+	}
+	return clients
 }
 
 // Broadcast geo updates to all connected clients
 func broadcastGeoUpdate() {
+	wsClientsMux.RLock()
+	clientList := make([]*WebSocketClient, 0, len(wsClients))
 	for client := range wsClients {
-		// Use the new ForceGeoRefresh method for immediate updates
+		if client.IsHealthy() {
+			clientList = append(clientList, client)
+		}
+	}
+	wsClientsMux.RUnlock()
+	
+	for _, client := range clientList {
 		client.ForceGeoRefresh()
 	}
 	
-	log.Printf("Broadcasted geo updates to %d connected clients", len(wsClients))
+	log.Printf("[WebSocket] Broadcasted geo updates to %d connected clients", len(clientList))
 }
 
-// Trigger immediate geo processing for existing IPs
+// Start periodic WebSocket health monitoring
+func startWebSocketHealthMonitor() {
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		
+		for range ticker.C {
+			wsClientsMux.RLock()
+			unhealthyClients := make([]*WebSocketClient, 0)
+			totalClients := len(wsClients)
+			
+			for client := range wsClients {
+				if !client.IsHealthy() {
+					unhealthyClients = append(unhealthyClients, client)
+				}
+			}
+			wsClientsMux.RUnlock()
+			
+			// Remove unhealthy clients
+			if len(unhealthyClients) > 0 {
+				wsClientsMux.Lock()
+				for _, client := range unhealthyClients {
+					delete(wsClients, client)
+				}
+				wsClientsMux.Unlock()
+				
+				log.Printf("[WebSocket] Health check: removed %d unhealthy clients, %d remaining", 
+					len(unhealthyClients), totalClients-len(unhealthyClients))
+			}
+			
+			if totalClients > 0 && len(unhealthyClients) == 0 {
+				log.Printf("[WebSocket] Health check: %d clients healthy", totalClients)
+			}
+		}
+	}()
+}
+
+// Enhanced trigger immediate geo processing with better client notification
 func triggerImmediateGeoProcessing() {
-	log.Println("Triggering immediate geo processing for existing IPs...")
+	log.Println("[GeoLocation] Triggering immediate geo processing for existing IPs...")
 	
 	// Get current stats to find top IPs that might need re-processing
 	stats := logParser.GetStats()
@@ -146,12 +228,12 @@ func triggerImmediateGeoProcessing() {
 			geoData := GetGeoLocation(ip)
 			if geoData != nil {
 				processedCount++
-				log.Printf("Re-processed IP %s: %s, %s", ip, geoData.Country, geoData.City)
+				log.Printf("[GeoLocation] Re-processed IP %s: %s, %s", ip, geoData.Country, geoData.City)
 			}
 		}
 		
 		if processedCount > 0 {
-			log.Printf("Completed immediate geo processing for %d IPs", processedCount)
+			log.Printf("[GeoLocation] Completed immediate geo processing for %d IPs", processedCount)
 			// Broadcast updates to all connected clients
 			broadcastGeoUpdate()
 		}
@@ -187,6 +269,7 @@ func isInRangeCheck(s string, min, max int) bool {
 	return n >= min && n <= max
 }
 
+// API Route Handlers
 func getStats(c *gin.Context) {
 	stats := logParser.GetStats()
 	c.JSON(http.StatusOK, stats)
@@ -349,14 +432,40 @@ func setLogFiles(c *gin.Context) {
 	})
 }
 
+func getWebSocketStatus(c *gin.Context) {
+	status := gin.H{
+		"connectedClients": getWSClientCount(),
+		"clients":          getWSClientInfo(),
+		"upgrader": gin.H{
+			"readBufferSize":  upgrader.ReadBufferSize,
+			"writeBufferSize": upgrader.WriteBufferSize,
+		},
+		"timestamp": time.Now().Format(time.RFC3339),
+	}
+	
+	c.JSON(http.StatusOK, status)
+}
+
 func healthCheck(c *gin.Context) {
 	config := GetMaxMindConfig()
 	
 	health := gin.H{
-		"status":    "ok",
+		"status": "ok",
+		"timestamp": time.Now().Format(time.RFC3339),
+		"websocket": gin.H{
+			"connectedClients": getWSClientCount(),
+			"upgraderConfig": gin.H{
+				"readBufferSize":  upgrader.ReadBufferSize,
+				"writeBufferSize": upgrader.WriteBufferSize,
+			},
+		},
 		"maxmind": gin.H{
 			"enabled":        config.Enabled,
 			"databaseLoaded": config.DatabaseLoaded,
+		},
+		"logParser": gin.H{
+			"totalLogs":       len(logParser.logs),
+			"isProcessingGeo": logParser.IsProcessingGeo(),
 		},
 	}
 	
@@ -367,19 +476,39 @@ func healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, health)
 }
 
+// Enhanced WebSocket handler with better error handling and logging
 func handleWebSocket(c *gin.Context) {
+	log.Printf("[WebSocket] New connection attempt from %s", c.ClientIP())
+	
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Println("WebSocket upgrade error:", err)
+		log.Printf("[WebSocket] Upgrade error from %s: %v", c.ClientIP(), err)
 		return
 	}
 
 	client := NewWebSocketClient(conn, logParser)
-	addWSClient(client) // Track the client
+	addWSClient(client)
 	
-	go client.WritePump()
+	// Start client goroutines with proper cleanup
 	go func() {
-		client.ReadPump()
-		removeWSClient(client) // Remove client when connection closes
+		defer func() {
+			removeWSClient(client)
+			if r := recover(); r != nil {
+				log.Printf("[WebSocket] WritePump panic recovered: %v", r)
+			}
+		}()
+		client.WritePump()
 	}()
+	
+	go func() {
+		defer func() {
+			removeWSClient(client)
+			if r := recover(); r != nil {
+				log.Printf("[WebSocket] ReadPump panic recovered: %v", r)
+			}
+		}()
+		client.ReadPump()
+	}()
+	
+	log.Printf("[WebSocket] Client setup complete for %s", c.ClientIP())
 }

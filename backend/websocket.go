@@ -12,13 +12,7 @@ type WebSocketMessage struct {
 	Type   string      `json:"type"`
 	Data   interface{} `json:"data,omitempty"`
 	Params interface{} `json:"params,omitempty"`
-	Stats  *Stats      `json:"stats,omitempty"`  // Add stats field for bundled updates
-}
-
-// NewLogWithStats represents a new log entry bundled with current stats
-type NewLogWithStats struct {
-	Log   LogEntry `json:"log"`
-	Stats Stats    `json:"stats"`
+	Stats  *Stats      `json:"stats,omitempty"`
 }
 
 type WebSocketClient struct {
@@ -26,19 +20,25 @@ type WebSocketClient struct {
 	send      chan []byte
 	logParser *LogParser
 	logChan   chan LogEntry
+	clientID  string
 }
 
 func NewWebSocketClient(conn *websocket.Conn, logParser *LogParser) *WebSocketClient {
+	clientID := time.Now().Format("20060102-150405") + "-" + conn.RemoteAddr().String()
+	log.Printf("[WebSocket] New client connected: %s", clientID)
+	
 	return &WebSocketClient{
 		conn:      conn,
 		send:      make(chan []byte, 256),
 		logParser: logParser,
 		logChan:   make(chan LogEntry, 100),
+		clientID:  clientID,
 	}
 }
 
 func (c *WebSocketClient) ReadPump() {
 	defer func() {
+		log.Printf("[WebSocket] Client %s disconnecting", c.clientID)
 		c.logParser.RemoveListener(c.logChan)
 		c.conn.Close()
 	}()
@@ -53,24 +53,24 @@ func (c *WebSocketClient) ReadPump() {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("WebSocket error: %v", err)
+				log.Printf("[WebSocket] Client %s error: %v", c.clientID, err)
 			}
 			break
 		}
 
 		var msg WebSocketMessage
 		if err := json.Unmarshal(message, &msg); err != nil {
-			log.Printf("Error unmarshaling WebSocket message: %v", err)
+			log.Printf("[WebSocket] Client %s message parse error: %v", c.clientID, err)
 			continue
 		}
 
+		log.Printf("[WebSocket] Client %s sent message type: %s", c.clientID, msg.Type)
 		c.handleMessage(msg)
 	}
 }
 
 func (c *WebSocketClient) WritePump() {
 	ticker := time.NewTicker(54 * time.Second)
-	// Reduce stats interval since we're now sending stats with each log
 	statsInterval := time.NewTicker(10 * time.Second)
 	geoStatsInterval := time.NewTicker(15 * time.Second)
 	
@@ -79,14 +79,18 @@ func (c *WebSocketClient) WritePump() {
 		statsInterval.Stop()
 		geoStatsInterval.Stop()
 		c.conn.Close()
+		log.Printf("[WebSocket] Client %s write pump stopped", c.clientID)
 	}()
 
 	// Send initial data
+	log.Printf("[WebSocket] Sending initial data to client %s", c.clientID)
 	c.sendInitialData()
 
 	// Subscribe to new logs
 	c.logParser.AddListener(c.logChan)
+	log.Printf("[WebSocket] Client %s subscribed to log updates", c.clientID)
 
+	messageCount := 0
 	for {
 		select {
 		case message, ok := <-c.send:
@@ -97,14 +101,25 @@ func (c *WebSocketClient) WritePump() {
 			}
 
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				log.Printf("[WebSocket] Client %s write error: %v", c.clientID, err)
 				return
 			}
+			
+			messageCount++
+			if messageCount%100 == 0 {
+				log.Printf("[WebSocket] Client %s sent %d messages", c.clientID, messageCount)
+			}
 
-		case log := <-c.logChan:
-			c.sendNewLogWithStats(log)
+		case logEntry := <-c.logChan:
+			if logEntry.ID == "CLEAR" {
+				log.Printf("[WebSocket] Sending clear signal to client %s", c.clientID)
+			} else {
+				log.Printf("[WebSocket] Sending new log to client %s: %s %s %s", 
+					c.clientID, logEntry.Method, logEntry.Path, logEntry.ClientIP)
+			}
+			c.sendNewLogWithStats(logEntry)
 
 		case <-statsInterval.C:
-			// Send standalone stats update (less frequent now)
 			c.sendStats()
 
 		case <-geoStatsInterval.C:
@@ -114,6 +129,7 @@ func (c *WebSocketClient) WritePump() {
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				log.Printf("[WebSocket] Client %s ping error: %v", c.clientID, err)
 				return
 			}
 		}
@@ -122,10 +138,12 @@ func (c *WebSocketClient) WritePump() {
 
 func (c *WebSocketClient) sendInitialData() {
 	// Send initial stats
+	log.Printf("[WebSocket] Sending initial stats to client %s", c.clientID)
 	c.sendStats()
 
 	// Send recent logs
 	result := c.logParser.GetLogs(LogsParams{Page: 1, Limit: 50})
+	log.Printf("[WebSocket] Sending %d initial logs to client %s", len(result.Logs), c.clientID)
 	c.sendMessage(WebSocketMessage{
 		Type: "logs",
 		Data: result.Logs,
@@ -133,12 +151,12 @@ func (c *WebSocketClient) sendInitialData() {
 
 	// Send initial geo stats
 	c.sendGeoStats()
-	
-	// Send geo processing status to show current state
 	c.sendGeoProcessingStatus()
 }
 
 func (c *WebSocketClient) handleMessage(msg WebSocketMessage) {
+	log.Printf("[WebSocket] Client %s handling message: %s", c.clientID, msg.Type)
+	
 	switch msg.Type {
 	case "getLogs":
 		params := LogsParams{Page: 1, Limit: 50}
@@ -148,36 +166,42 @@ func (c *WebSocketClient) handleMessage(msg WebSocketMessage) {
 			}
 		}
 		result := c.logParser.GetLogs(params)
+		log.Printf("[WebSocket] Client %s requested logs, sending %d logs", c.clientID, len(result.Logs))
 		c.sendMessage(WebSocketMessage{
 			Type: "logs",
 			Data: result,
 		})
 
 	case "getStats":
+		log.Printf("[WebSocket] Client %s requested stats", c.clientID)
 		c.sendStats()
 
 	case "getGeoStats":
+		log.Printf("[WebSocket] Client %s requested geo stats", c.clientID)
 		c.sendGeoStats()
 		
 	case "refreshGeoData":
-		// Handle explicit geo data refresh requests
-		log.Println("Received geo data refresh request from client")
+		log.Printf("[WebSocket] Client %s requested geo data refresh", c.clientID)
 		c.sendGeoStats()
 		c.sendStats()
+		
+	default:
+		log.Printf("[WebSocket] Client %s sent unknown message type: %s", c.clientID, msg.Type)
 	}
 }
 
 func (c *WebSocketClient) sendMessage(msg WebSocketMessage) {
 	data, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("Error marshaling WebSocket message: %v", err)
+		log.Printf("[WebSocket] Client %s marshal error: %v", c.clientID, err)
 		return
 	}
 
 	select {
 	case c.send <- data:
+		// Message sent successfully
 	default:
-		log.Println("WebSocket send channel full, dropping message")
+		log.Printf("[WebSocket] Client %s send channel full, dropping message type: %s", c.clientID, msg.Type)
 	}
 }
 
@@ -213,7 +237,6 @@ func (c *WebSocketClient) sendGeoProcessingStatus() {
 	})
 }
 
-// Updated function to send new log with current stats
 func (c *WebSocketClient) sendNewLogWithStats(log LogEntry) {
 	// Check if this is a clear signal
 	if log.ID == "CLEAR" {
@@ -232,27 +255,19 @@ func (c *WebSocketClient) sendNewLogWithStats(log LogEntry) {
 	}
 
 	// Get current stats - this will include the impact of the new log
-	// since stats are updated in parseLine before notifying listeners
 	currentStats := c.logParser.GetStats()
 
 	// Send new log message with bundled stats for real-time updates
 	c.sendMessage(WebSocketMessage{
 		Type:  "newLog",
 		Data:  log,
-		Stats: &currentStats,  // Include current stats with the log
+		Stats: &currentStats,
 	})
 }
 
-// Keep the old function for backward compatibility, but mark as deprecated
-func (c *WebSocketClient) sendNewLog(log LogEntry) {
-	// This function is now deprecated in favor of sendNewLogWithStats
-	// Redirect to the new function
-	c.sendNewLogWithStats(log)
-}
-
-// New method to force refresh geo data (called from main.go broadcast)
+// Enhanced method to force refresh geo data
 func (c *WebSocketClient) ForceGeoRefresh() {
-	log.Println("Forcing geo data refresh for WebSocket client")
+	log.Printf("[WebSocket] Forcing geo data refresh for client %s", c.clientID)
 	c.sendGeoStats()
 	c.sendStats()
 	
@@ -260,8 +275,23 @@ func (c *WebSocketClient) ForceGeoRefresh() {
 	c.sendMessage(WebSocketMessage{
 		Type: "geoDataUpdated",
 		Data: map[string]interface{}{
-			"message": "MaxMind database updated, geo data refreshed",
+			"message":   "MaxMind database updated, geo data refreshed",
 			"timestamp": time.Now().Unix(),
 		},
 	})
+}
+
+// Health check method to verify client is still active
+func (c *WebSocketClient) IsHealthy() bool {
+	return c.conn != nil
+}
+
+// Get client info for debugging
+func (c *WebSocketClient) GetInfo() map[string]interface{} {
+	return map[string]interface{}{
+		"clientID":    c.clientID,
+		"remoteAddr":  c.conn.RemoteAddr().String(),
+		"sendChanLen": len(c.send),
+		"logChanLen":  len(c.logChan),
+	}
 }

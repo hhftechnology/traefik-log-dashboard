@@ -25,17 +25,34 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogEntry } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
-import { Globe, Server, Router, Network, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Settings } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { 
+  Globe, 
+  Server, 
+  Router, 
+  Network, 
+  ExternalLink, 
+  ChevronUp, 
+  ChevronDown, 
+  ChevronsUpDown, 
+  ChevronLeft, 
+  ChevronRight, 
+  ChevronsLeft, 
+  ChevronsRight, 
+  Settings,
+  Wifi,
+  WifiOff
+} from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 
 interface LogTableProps {
   logs: LogEntry[];
+  isConnected: boolean;
 }
 
 type SortColumn = keyof LogEntry;
 type SortDirection = 'asc' | 'desc' | null;
 
-export function LogTable({ logs: realtimeLogs }: LogTableProps) {
+export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [hideUnknown, setHideUnknown] = useState(false);
@@ -43,10 +60,10 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
   const [pathTruncateLength, setPathTruncateLength] = useState(50);
+  const [autoScroll, setAutoScroll] = useState(true);
 
-  // Column visibility state
+  // Column visibility state - show essential columns by default
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
-    id: false,
     timestamp: true,
     clientIP: true,
     method: true,
@@ -55,16 +72,19 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
     responseTime: true,
     serviceName: true,
     routerName: true,
-    host: false,
     requestAddr: true,
     requestHost: true,
-    userAgent: false,
     size: true,
     country: true,
+    // Hide less important columns by default
+    id: false,
+    host: false,
+    userAgent: false,
     city: false,
     countryCode: false,
     lat: false,
     lon: false,
+    // Hide all detailed fields by default
     StartUTC: false,
     StartLocal: false,
     Duration: false,
@@ -91,33 +111,6 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
     TLSClientSubject: false,
     TraceId: false,
     SpanId: false,
-    "downstream_X-Content-Type-Options": false,
-    "downstream_X-Frame-Options": false,
-    "origin_X-Content-Type-Options": false,
-    "origin_X-Frame-Options": false,
-    "request_Accept": false,
-    "request_Accept-Encoding": false,
-    "request_Accept-Language": false,
-    "request_Cdn-Loop": false,
-    "request_Cf-Connecting-Ip": true,
-    "request_Cf-Ipcountry": true,
-    "request_Cf-Ray": false,
-    "request_Cf-Visitor": false,
-    "request_Cf-Warp-Tag-Id": false,
-    "request_Dnt": false,
-    "request_Priority": false,
-    "request_Sec-Fetch-Dest": false,
-    "request_Sec-Fetch-Mode": false,
-    "request_Sec-Fetch-Site": false,
-    "request_Sec-Fetch-User": false,
-    "request_Sec-Gpc": false,
-    "request_Upgrade-Insecure-Requests": false,
-    "request_User-Agent": false,
-    "request_X-Forwarded-Host": false,
-    "request_X-Forwarded-Port": false,
-    "request_X-Forwarded-Proto": false,
-    "request_X-Forwarded-Server": false,
-    "request_X-Real-Ip": true,
   });
 
   const columnNames: Record<string, string> = {
@@ -166,33 +159,6 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
     TLSClientSubject: 'TLS Client Subject',
     TraceId: 'Trace ID',
     SpanId: 'Span ID',
-    "downstream_X-Content-Type-Options": "Downstream X-Content-Type-Options",
-    "downstream_X-Frame-Options": "Downstream X-Frame-Options",
-    "origin_X-Content-Type-Options": "Origin X-Content-Type-Options",
-    "origin_X-Frame-Options": "Origin X-Frame-Options",
-    "request_Accept": "Accept",
-    "request_Accept-Encoding": "Accept-Encoding",
-    "request_Accept-Language": "Accept-Language",
-    "request_Cdn-Loop": "CDN Loop",
-    "request_Cf-Connecting-Ip": "CF Connecting IP",
-    "request_Cf-Ipcountry": "CF IP Country",
-    "request_Cf-Ray": "CF Ray",
-    "request_Cf-Visitor": "CF Visitor",
-    "request_Cf-Warp-Tag-Id": "CF Warp Tag ID",
-    "request_Dnt": "DNT",
-    "request_Priority": "Priority",
-    "request_Sec-Fetch-Dest": "Sec-Fetch-Dest",
-    "request_Sec-Fetch-Mode": "Sec-Fetch-Mode",
-    "request_Sec-Fetch-Site": "Sec-Fetch-Site",
-    "request_Sec-Fetch-User": "Sec-Fetch-User",
-    "request_Sec-Gpc": "Sec-GPC",
-    "request_Upgrade-Insecure-Requests": "Upgrade-Insecure-Requests",
-    "request_User-Agent": "User-Agent",
-    "request_X-Forwarded-Host": "X-Forwarded-Host",
-    "request_X-Forwarded-Port": "X-Forwarded-Port",
-    "request_X-Forwarded-Proto": "X-Forwarded-Proto",
-    "request_X-Forwarded-Server": "X-Forwarded-Server",
-    "request_X-Real-Ip": "X-Real-IP",
   };
 
   const visibleColumns = useMemo(() => {
@@ -201,15 +167,9 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
 
   // Helper function to check if IP is private
   const isPrivateIP = (ip: string) => {
-    if (ip === "" || ip === "unknown") {
-      return true;
-    }
-
+    if (ip === "" || ip === "unknown") return true;
     const parts = ip.split(".");
-    if (parts.length !== 4) {
-      return false;
-    }
-
+    if (parts.length !== 4) return false;
     return ip === "127.0.0.1" ||
       ip === "localhost" ||
       ip.startsWith("::") ||
@@ -220,30 +180,31 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
       (parts[0] === "169" && parts[1] === "254");
   };
 
-  // Apply filters to real-time logs
+  // Apply filters to real-time logs with useMemo for performance
   const filteredLogs = useMemo(() => {
-    return realtimeLogs.filter(log => {
-      // Apply hideUnknown filter
+    console.log('Filtering logs:', { total: realtimeLogs.length, hideUnknown, hidePrivateIPs });
+    
+    const filtered = realtimeLogs.filter(log => {
       if (hideUnknown && (log.serviceName === "unknown" || log.routerName === "unknown")) {
         return false;
       }
-      
-      // Apply hidePrivateIPs filter
       if (hidePrivateIPs && isPrivateIP(log.clientIP)) {
         return false;
       }
-      
       return true;
     });
+    
+    console.log('Filtered logs:', filtered.length);
+    return filtered;
   }, [realtimeLogs, hideUnknown, hidePrivateIPs]);
 
-  // Apply sorting
+  // Apply sorting with useMemo for performance
   const sortedLogs = useMemo(() => {
     if (!sortColumn || !sortDirection) {
       return filteredLogs;
     }
 
-    return [...filteredLogs].sort((a, b) => {
+    const sorted = [...filteredLogs].sort((a, b) => {
       let aValue = a[sortColumn];
       let bValue = b[sortColumn];
       
@@ -251,18 +212,32 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
         return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
       }
 
-      const aStr = String(aValue).toLowerCase();
-      const bStr = String(bValue).toLowerCase();
+      const aStr = String(aValue || '').toLowerCase();
+      const bStr = String(bValue || '').toLowerCase();
       
       if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1;
       if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
+    
+    return sorted;
   }, [filteredLogs, sortColumn, sortDirection]);
 
   // Calculate pagination
   const totalLogs = sortedLogs.length;
   const totalPages = Math.ceil(totalLogs / pageSize);
+  
+  // Auto-scroll to first page when new logs arrive (if enabled and on first page)
+  useEffect(() => {
+    if (autoScroll && currentPage === 1) {
+      // Already on first page, no need to change
+    } else if (autoScroll && realtimeLogs.length > 0) {
+      // New logs arrived, go to first page to see them
+      setCurrentPage(1);
+    }
+  }, [realtimeLogs.length, autoScroll]);
+
+  // Calculate display logs for current page
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = Math.min(startIndex + pageSize, totalLogs);
   const displayLogs = sortedLogs.slice(startIndex, endIndex);
@@ -272,10 +247,10 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
     setCurrentPage(1);
   }, [hideUnknown, hidePrivateIPs, pageSize]);
 
-  // Reset to first page if current page is beyond total pages
+  // Reset to valid page if current page is beyond total pages
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(totalPages);
+      setCurrentPage(Math.max(1, totalPages));
     }
   }, [currentPage, totalPages]);
 
@@ -316,17 +291,12 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
 
   const getMethodBadgeVariant = (method: string) => {
     switch (method) {
-      case "GET":
-        return "secondary";
-      case "POST":
-        return "default";
+      case "GET": return "secondary";
+      case "POST": return "default";
       case "PUT":
-      case "PATCH":
-        return "warning";
-      case "DELETE":
-        return "destructive";
-      default:
-        return "outline";
+      case "PATCH": return "warning";
+      case "DELETE": return "destructive";
+      default: return "outline";
     }
   };
 
@@ -334,6 +304,87 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
     if (time < 100) return { value: time.toFixed(0), unit: "ms", color: "text-green-600 dark:text-green-400" };
     if (time < 1000) return { value: time.toFixed(0), unit: "ms", color: "text-yellow-600 dark:text-yellow-400" };
     return { value: (time / 1000).toFixed(2), unit: "s", color: "text-red-600 dark:text-red-400" };
+  };
+
+  const renderCellContent = (log: LogEntry, column: string) => {
+    const value = log[column as keyof LogEntry];
+    
+    switch (column) {
+      case 'timestamp':
+        return (
+          <span className="font-mono text-xs" title={log.timestamp}>
+            {format(new Date(log.timestamp), "HH:mm:ss")}
+          </span>
+        );
+      case 'method':
+        return <Badge variant={getMethodBadgeVariant(log.method)}>{log.method}</Badge>;
+      case 'path':
+        const truncatedPath = log.path.length > pathTruncateLength 
+          ? `${log.path.substring(0, pathTruncateLength)}...` 
+          : log.path;
+        return (
+          <span 
+            className="max-w-xs font-mono text-xs cursor-help hover:text-blue-600 dark:hover:text-blue-400 transition-colors block truncate" 
+            title={log.path}
+          >
+            {truncatedPath}
+          </span>
+        );
+      case 'status':
+        return <Badge variant={getStatusBadgeVariant(log.status)}>{log.status}</Badge>;
+      case 'responseTime':
+        const responseTime = formatResponseTime(log.responseTime);
+        return (
+          <span className={`font-mono text-xs ${responseTime.color}`}>
+            {responseTime.value}{responseTime.unit}
+          </span>
+        );
+      case 'serviceName':
+        return (
+          <div className="flex items-center gap-1">
+            <Server className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs">{log.serviceName}</span>
+          </div>
+        );
+      case 'routerName':
+        return (
+          <div className="flex items-center gap-1">
+            <Router className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs">{log.routerName}</span>
+          </div>
+        );
+      case 'requestAddr':
+        return (
+          <div className="flex items-center gap-1">
+            <Network className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs font-mono max-w-32 truncate" title={log.requestAddr}>
+              {log.requestAddr || '-'}
+            </span>
+          </div>
+        );
+      case 'requestHost':
+        return (
+          <div className="flex items-center gap-1">
+            <ExternalLink className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs font-mono max-w-32 truncate" title={log.requestHost}>
+              {log.requestHost || '-'}
+            </span>
+          </div>
+        );
+      case 'country':
+        return log.country ? (
+          <div className="flex items-center gap-1">
+            <Globe className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs">{log.countryCode} - {log.city}</span>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">-</span>
+        );
+      case 'size':
+        return <span className="text-xs">{(log.size / 1024).toFixed(1)} KB</span>;
+      default:
+        return <span className="text-xs">{String(value ?? '-')}</span>;
+    }
   };
 
   const getPageRange = () => {
@@ -363,52 +414,6 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
     return rangeWithDots;
   };
 
-  const renderCellContent = (log: LogEntry, column: string) => {
-    switch (column) {
-      case 'timestamp':
-        return <span className="font-mono text-xs">{format(new Date(log.timestamp), "HH:mm:ss")}</span>;
-      case 'method':
-        return <Badge variant={getMethodBadgeVariant(log.method)}>{log.method}</Badge>;
-      case 'path':
-        const truncatedPath = log.path.length > pathTruncateLength 
-          ? `${log.path.substring(0, pathTruncateLength)}...` 
-          : log.path;
-        return (
-          <span 
-            className="max-w-xs font-mono text-xs cursor-help hover:text-blue-600 dark:hover:text-blue-400 transition-colors" 
-            title={log.path}
-            style={{ 
-              display: 'block',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
-            }}
-          >
-            {truncatedPath}
-          </span>
-        );
-      case 'status':
-        return <Badge variant={getStatusBadgeVariant(log.status)}>{log.status}</Badge>;
-      case 'responseTime':
-        const responseTime = formatResponseTime(log.responseTime);
-        return <span className={`font-mono text-xs ${responseTime.color}`}>{responseTime.value}{responseTime.unit}</span>;
-      case 'serviceName':
-        return <div className="flex items-center gap-1"><Server className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{log.serviceName}</span></div>;
-      case 'routerName':
-        return <div className="flex items-center gap-1"><Router className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{log.routerName}</span></div>;
-      case 'requestAddr':
-        return <div className="flex items-center gap-1"><Network className="h-3 w-3 text-muted-foreground" /><span className="text-xs font-mono max-w-32 truncate" title={log.requestAddr}>{log.requestAddr || '-'}</span></div>;
-      case 'requestHost':
-        return <div className="flex items-center gap-1"><ExternalLink className="h-3 w-3 text-muted-foreground" /><span className="text-xs font-mono max-w-32 truncate" title={log.requestHost}>{log.requestHost || '-'}</span></div>;
-      case 'country':
-        return log.country ? <div className="flex items-center gap-1"><Globe className="h-3 w-3 text-muted-foreground" /><span className="text-xs">{log.countryCode} - {log.city}</span></div> : null;
-      case 'size':
-        return <span className="text-xs">{(log.size / 1024).toFixed(1)} KB</span>;
-      default:
-        return <span className="text-xs">{String(log[column as keyof LogEntry] ?? '-')}</span>;
-    }
-  };
-  
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -419,29 +424,49 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
               checked={hideUnknown}
               onCheckedChange={(checked) => setHideUnknown(checked as boolean)}
             />
-            <Label 
-              htmlFor="hide-unknown" 
-              className="text-sm font-normal cursor-pointer"
-            >
+            <Label htmlFor="hide-unknown" className="text-sm font-normal cursor-pointer">
               Hide unknown service/router
             </Label>
           </div>
+          
           <div className="flex items-center space-x-2">
             <Checkbox 
               id="hide-private-ips" 
               checked={hidePrivateIPs}
               onCheckedChange={(checked) => setHidePrivateIPs(checked as boolean)}
             />
-            <Label 
-              htmlFor="hide-private-ips" 
-              className="text-sm font-normal cursor-pointer"
-            >
+            <Label htmlFor="hide-private-ips" className="text-sm font-normal cursor-pointer">
               Hide private IPs
             </Label>
           </div>
-          <Badge variant="secondary" className="text-xs">
-            Real-time
-          </Badge>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="auto-scroll" 
+              checked={autoScroll}
+              onCheckedChange={(checked) => setAutoScroll(checked as boolean)}
+            />
+            <Label htmlFor="auto-scroll" className="text-sm font-normal cursor-pointer">
+              Auto-scroll to new logs
+            </Label>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {isConnected ? (
+              <Badge variant="success" className="gap-1">
+                <Wifi className="h-3 w-3" />
+                Real-time
+              </Badge>
+            ) : (
+              <Badge variant="destructive" className="gap-1">
+                <WifiOff className="h-3 w-3" />
+                Disconnected
+              </Badge>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {realtimeLogs.length} total logs
+            </span>
+          </div>
         </div>
         
         <div className="flex items-center gap-4">
@@ -463,12 +488,12 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-2">
-                <Settings className="h-4 w-4 text-muted-foreground" />
+                <Settings className="h-4 w-4" />
                 Columns
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              {(Object.keys(columnNames) as Array<string>).map(key => (
+            <DropdownMenuContent align="end" className="w-48 max-h-96 overflow-y-auto">
+              {Object.entries(columnNames).map(([key, name]) => (
                 <DropdownMenuCheckboxItem
                   key={key}
                   checked={columnVisibility[key]}
@@ -476,7 +501,7 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
                     setColumnVisibility(prev => ({ ...prev, [key]: checked }))
                   }
                 >
-                  {columnNames[key]}
+                  {name}
                 </DropdownMenuCheckboxItem>
               ))}
             </DropdownMenuContent>
@@ -489,9 +514,10 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="25">25</SelectItem>
                 <SelectItem value="50">50</SelectItem>
                 <SelectItem value="100">100</SelectItem>
-                <SelectItem value="150">150</SelectItem>
+                <SelectItem value="200">200</SelectItem>
               </SelectContent>
             </Select>
             <span className="text-sm text-muted-foreground">entries</span>
@@ -525,15 +551,24 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
             {displayLogs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={visibleColumns.length} className="h-24 text-center text-muted-foreground">
-                  {realtimeLogs.length === 0 ? "No logs available" : "No logs match the current filters"}
+                  {!isConnected ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <WifiOff className="h-4 w-4" />
+                      <span>WebSocket disconnected. Attempting to reconnect...</span>
+                    </div>
+                  ) : realtimeLogs.length === 0 ? (
+                    "No logs available. Waiting for incoming requests..."
+                  ) : (
+                    "No logs match the current filters"
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
               displayLogs.map((log) => (
-                <TableRow key={log.id}>
+                <TableRow key={log.id} className="hover:bg-muted/50">
                   {visibleColumns.map(column => (
-                    <TableCell key={column}>
-                      {renderCellContent(log, column as keyof LogEntry)}
+                    <TableCell key={column} className="py-2 px-4">
+                      {renderCellContent(log, column)}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -546,7 +581,7 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            Total {totalLogs} entries
+            Total {totalLogs} entries • Page {currentPage} of {totalPages}
           </div>
           
           <div className="flex items-center gap-2">
@@ -555,6 +590,7 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
               size="icon"
               onClick={() => setCurrentPage(1)}
               disabled={currentPage === 1}
+              title="First page"
             >
               <ChevronsLeft className="h-4 w-4" />
             </Button>
@@ -563,6 +599,7 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
               size="icon"
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
+              title="Previous page"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -591,6 +628,7 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
               size="icon"
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
+              title="Next page"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -599,6 +637,7 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
               size="icon" 
               onClick={() => setCurrentPage(totalPages)}
               disabled={currentPage === totalPages}
+              title="Last page"
             >
               <ChevronsRight className="h-4 w-4" />
             </Button>
