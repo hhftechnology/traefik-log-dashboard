@@ -155,6 +155,12 @@ func (c *WebSocketClient) handleMessage(msg WebSocketMessage) {
 
 	case "getGeoStats":
 		c.sendGeoStats()
+		
+	case "refreshGeoData":
+		// Handle explicit geo data refresh requests
+		log.Println("Received geo data refresh request from client")
+		c.sendGeoStats()
+		c.sendStats()
 	}
 }
 
@@ -199,6 +205,7 @@ func (c *WebSocketClient) sendGeoProcessingStatus() {
 			"cachedLocations":        cacheStats.Keys,
 			"totalCountries":         len(stats.Countries),
 			"isProcessing":           c.logParser.IsProcessingGeo(),
+			"maxmindConfig":          cacheStats.MaxMindConfig,
 		},
 	})
 }
@@ -238,4 +245,20 @@ func (c *WebSocketClient) sendNewLog(log LogEntry) {
 	// This function is now deprecated in favor of sendNewLogWithStats
 	// Redirect to the new function
 	c.sendNewLogWithStats(log)
+}
+
+// New method to force refresh geo data (called from main.go broadcast)
+func (c *WebSocketClient) ForceGeoRefresh() {
+	log.Println("Forcing geo data refresh for WebSocket client")
+	c.sendGeoStats()
+	c.sendStats()
+	
+	// Send a special message to trigger immediate map update on frontend
+	c.sendMessage(WebSocketMessage{
+		Type: "geoDataUpdated",
+		Data: map[string]interface{}{
+			"message": "MaxMind database updated, geo data refreshed",
+			"timestamp": time.Now().Unix(),
+		},
+	})
 }

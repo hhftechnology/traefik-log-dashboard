@@ -96,7 +96,7 @@ export interface Stats {
 }
 
 interface WebSocketMessage {
-  type: 'newLog' | 'logs' | 'stats' | 'geoStats' | 'clear';
+  type: 'newLog' | 'logs' | 'stats' | 'geoStats' | 'clear' | 'geoDataUpdated';
   data: any;
   stats?: Stats; // Optional stats field for bundled updates
 }
@@ -229,6 +229,7 @@ export function useWebSocket() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [geoDataVersion, setGeoDataVersion] = useState(0); // Track geo data updates
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -287,11 +288,24 @@ export function useWebSocket() {
                 topCountries: message.data.countries || prevStats.topCountries
               };
             });
+            // Increment geo data version to trigger re-renders
+            setGeoDataVersion(prev => prev + 1);
+            break;
+            
+          case 'geoDataUpdated':
+            // Handle immediate geo data updates from MaxMind reload
+            console.log('Received geo data update notification:', message.data);
+            // Force a geo data version increment to trigger map re-render
+            setGeoDataVersion(prev => prev + 1);
+            // Request fresh geo stats
+            sendMessage({ type: 'getGeoStats' });
+            sendMessage({ type: 'getStats' });
             break;
             
           case 'clear':
             setLogs([]);
             setStats(null);
+            setGeoDataVersion(0);
             break;
         }
       };
@@ -324,6 +338,10 @@ export function useWebSocket() {
     sendMessage({ type: 'getStats' });
   }, [sendMessage]);
 
+  const refreshGeoData = useCallback(() => {
+    sendMessage({ type: 'refreshGeoData' });
+  }, [sendMessage]);
+
   useEffect(() => {
     connect();
 
@@ -341,7 +359,9 @@ export function useWebSocket() {
     logs,
     stats,
     isConnected,
+    geoDataVersion, // Expose geo data version for components that need to track updates
     requestLogs,
     requestStats,
+    refreshGeoData,
   };
 }

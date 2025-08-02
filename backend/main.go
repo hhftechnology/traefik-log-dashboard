@@ -20,6 +20,7 @@ var (
 			return true // Allow connections from any origin
 		},
 	}
+	wsClients = make(map[*WebSocketClient]bool) // Track WebSocket clients
 )
 
 func main() {
@@ -94,6 +95,96 @@ func main() {
 	if err := r.Run(":" + port); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
+}
+
+// Add client tracking functions
+func addWSClient(client *WebSocketClient) {
+	wsClients[client] = true
+}
+
+func removeWSClient(client *WebSocketClient) {
+	delete(wsClients, client)
+}
+
+// Broadcast geo updates to all connected clients
+func broadcastGeoUpdate() {
+	for client := range wsClients {
+		// Use the new ForceGeoRefresh method for immediate updates
+		client.ForceGeoRefresh()
+	}
+	
+	log.Printf("Broadcasted geo updates to %d connected clients", len(wsClients))
+}
+
+// Trigger immediate geo processing for existing IPs
+func triggerImmediateGeoProcessing() {
+	log.Println("Triggering immediate geo processing for existing IPs...")
+	
+	// Get current stats to find top IPs that might need re-processing
+	stats := logParser.GetStats()
+	
+	// Re-process top IPs immediately with the new MaxMind database
+	var ipsToProcess []string
+	for _, ipData := range stats.TopIPs {
+		if ipData.IP != "unknown" && !isPrivateIPCheck(ipData.IP) {
+			ipsToProcess = append(ipsToProcess, ipData.IP)
+		}
+		// Limit to top 20 IPs to avoid overwhelming the system
+		if len(ipsToProcess) >= 20 {
+			break
+		}
+	}
+	
+	// Process these IPs immediately in a goroutine
+	go func() {
+		processedCount := 0
+		for _, ip := range ipsToProcess {
+			// Clear any cached data for this IP first
+			ClearGeoCache()
+			
+			// Get fresh geo data with new MaxMind database
+			geoData := GetGeoLocation(ip)
+			if geoData != nil {
+				processedCount++
+				log.Printf("Re-processed IP %s: %s, %s", ip, geoData.Country, geoData.City)
+			}
+		}
+		
+		if processedCount > 0 {
+			log.Printf("Completed immediate geo processing for %d IPs", processedCount)
+			// Broadcast updates to all connected clients
+			broadcastGeoUpdate()
+		}
+	}()
+}
+
+// Helper function to check private IPs (duplicate of the one in logParser but needed here)
+func isPrivateIPCheck(ip string) bool {
+	if ip == "" || ip == "unknown" {
+		return true
+	}
+
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return false
+	}
+
+	return ip == "127.0.0.1" ||
+		ip == "localhost" ||
+		strings.HasPrefix(ip, "::") ||
+		ip == "::1" ||
+		parts[0] == "10" ||
+		(parts[0] == "172" && isInRangeCheck(parts[1], 16, 31)) ||
+		(parts[0] == "192" && parts[1] == "168") ||
+		(parts[0] == "169" && parts[1] == "254")
+}
+
+func isInRangeCheck(s string, min, max int) bool {
+	var n int
+	if _, err := fmt.Sscanf(s, "%d", &n); err != nil {
+		return false
+	}
+	return n >= min && n <= max
 }
 
 func getStats(c *gin.Context) {
@@ -178,9 +269,12 @@ func reloadMaxMindDatabase(c *gin.Context) {
 	// Clear geo cache to ensure fresh lookups
 	ClearGeoCache()
 
+	// Trigger immediate geo processing for existing IPs
+	triggerImmediateGeoProcessing()
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "MaxMind database reloaded successfully",
+		"message": "MaxMind database reloaded successfully, immediate geo processing initiated",
 		"config":  GetMaxMindConfig(),
 	})
 }
@@ -281,6 +375,11 @@ func handleWebSocket(c *gin.Context) {
 	}
 
 	client := NewWebSocketClient(conn, logParser)
+	addWSClient(client) // Track the client
+	
 	go client.WritePump()
-	go client.ReadPump()
+	go func() {
+		client.ReadPump()
+		removeWSClient(client) // Remove client when connection closes
+	}()
 }
