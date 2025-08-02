@@ -27,7 +27,6 @@ import { LogEntry } from "@/hooks/useWebSocket";
 import { format } from "date-fns";
 import { Globe, Server, Router, Network, ExternalLink, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Settings } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
-import axios from "axios";
 
 interface LogTableProps {
   logs: LogEntry[];
@@ -39,15 +38,11 @@ type SortDirection = 'asc' | 'desc' | null;
 export function LogTable({ logs: realtimeLogs }: LogTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalLogs, setTotalLogs] = useState(0);
-  const [apiLogs, setApiLogs] = useState<LogEntry[]>([]);
-  const [loading, setLoading] = useState(false);
   const [hideUnknown, setHideUnknown] = useState(false);
   const [hidePrivateIPs, setHidePrivateIPs] = useState(false);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
-  const [pathTruncateLength, setPathTruncateLength] = useState(50); // Configurable path length
+  const [pathTruncateLength, setPathTruncateLength] = useState(50);
 
   // Column visibility state
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
@@ -204,52 +199,85 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
     return (Object.keys(columnVisibility) as Array<keyof LogEntry>).filter(key => columnVisibility[key]);
   }, [columnVisibility]);
 
-  // Determine if we should use real-time logs or API logs
-  const shouldUseRealtimeLogs = currentPage === 1 && !hideUnknown && !hidePrivateIPs;
-
-  // Choose the appropriate log source
-  const displayLogs = shouldUseRealtimeLogs ? realtimeLogs.slice(0, pageSize) : apiLogs;
-
-  const fetchLogs = async (page: number, limit: number) => {
-    setLoading(true);
-    try {
-      const response = await axios.get('/api/logs', {
-        params: {
-          page,
-          limit,
-          hideUnknown,
-          hidePrivateIPs
-        }
-      });
-      setApiLogs(response.data.logs);
-      setTotalPages(response.data.totalPages);
-      setTotalLogs(response.data.total);
-    } catch (error) {
-      console.error('Error fetching logs:', error);
-    } finally {
-      setLoading(false);
+  // Helper function to check if IP is private
+  const isPrivateIP = (ip: string) => {
+    if (ip === "" || ip === "unknown") {
+      return true;
     }
+
+    const parts = ip.split(".");
+    if (parts.length !== 4) {
+      return false;
+    }
+
+    return ip === "127.0.0.1" ||
+      ip === "localhost" ||
+      ip.startsWith("::") ||
+      ip === "::1" ||
+      parts[0] === "10" ||
+      (parts[0] === "172" && parseInt(parts[1]) >= 16 && parseInt(parts[1]) <= 31) ||
+      (parts[0] === "192" && parts[1] === "168") ||
+      (parts[0] === "169" && parts[1] === "254");
   };
 
-  // Update total logs count for real-time mode
-  useEffect(() => {
-    if (shouldUseRealtimeLogs) {
-      setTotalLogs(realtimeLogs.length);
-      setTotalPages(Math.ceil(realtimeLogs.length / pageSize));
-    }
-  }, [realtimeLogs.length, pageSize, shouldUseRealtimeLogs]);
+  // Apply filters to real-time logs
+  const filteredLogs = useMemo(() => {
+    return realtimeLogs.filter(log => {
+      // Apply hideUnknown filter
+      if (hideUnknown && (log.serviceName === "unknown" || log.routerName === "unknown")) {
+        return false;
+      }
+      
+      // Apply hidePrivateIPs filter
+      if (hidePrivateIPs && isPrivateIP(log.clientIP)) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [realtimeLogs, hideUnknown, hidePrivateIPs]);
 
-  // Fetch logs when not using real-time mode
-  useEffect(() => {
-    if (!shouldUseRealtimeLogs) {
-      fetchLogs(currentPage, pageSize);
+  // Apply sorting
+  const sortedLogs = useMemo(() => {
+    if (!sortColumn || !sortDirection) {
+      return filteredLogs;
     }
-  }, [currentPage, pageSize, hideUnknown, hidePrivateIPs, shouldUseRealtimeLogs]);
+
+    return [...filteredLogs].sort((a, b) => {
+      let aValue = a[sortColumn];
+      let bValue = b[sortColumn];
+      
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+
+      const aStr = String(aValue).toLowerCase();
+      const bStr = String(bValue).toLowerCase();
+      
+      if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1;
+      if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [filteredLogs, sortColumn, sortDirection]);
+
+  // Calculate pagination
+  const totalLogs = sortedLogs.length;
+  const totalPages = Math.ceil(totalLogs / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalLogs);
+  const displayLogs = sortedLogs.slice(startIndex, endIndex);
 
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [hideUnknown, pageSize, hidePrivateIPs]);
+  }, [hideUnknown, hidePrivateIPs, pageSize]);
+
+  // Reset to first page if current page is beyond total pages
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const handleSort = (column: SortColumn) => {
     if (sortColumn === column) {
@@ -277,24 +305,6 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
     }
     return <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />;
   };
-
-  const sortedLogs = [...displayLogs].sort((a, b) => {
-    if (!sortColumn || !sortDirection) return 0;
-
-    let aValue = a[sortColumn];
-    let bValue = b[sortColumn];
-    
-    if (typeof aValue === 'number' && typeof bValue === 'number') {
-      return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
-    }
-
-    const aStr = String(aValue).toLowerCase();
-    const bStr = String(bValue).toLowerCase();
-    
-    if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1;
-    if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1;
-    return 0;
-  });
 
   const getStatusBadgeVariant = (status: number) => {
     if (status >= 200 && status < 300) return "success";
@@ -429,11 +439,9 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
               Hide private IPs
             </Label>
           </div>
-          {shouldUseRealtimeLogs && (
-            <Badge variant="secondary" className="text-xs">
-              Real-time
-            </Badge>
-          )}
+          <Badge variant="secondary" className="text-xs">
+            Real-time
+          </Badge>
         </div>
         
         <div className="flex items-center gap-4">
@@ -490,7 +498,7 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
           </div>
           
           <div className="text-sm text-muted-foreground">
-            Showing {Math.min((currentPage - 1) * pageSize + 1, totalLogs)} to {Math.min(currentPage * pageSize, totalLogs)} of {totalLogs} entries
+            Showing {Math.min(startIndex + 1, totalLogs)} to {endIndex} of {totalLogs} entries
           </div>
         </div>
       </div>
@@ -514,20 +522,14 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && !shouldUseRealtimeLogs ? (
+            {displayLogs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={visibleColumns.length} className="h-24 text-center text-muted-foreground">
-                  Loading logs...
-                </TableCell>
-              </TableRow>
-            ) : sortedLogs.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={visibleColumns.length} className="h-24 text-center text-muted-foreground">
-                  No logs found. {hideUnknown && "Try disabling the 'Hide unknown' filter."}
+                  {realtimeLogs.length === 0 ? "No logs available" : "No logs match the current filters"}
                 </TableCell>
               </TableRow>
             ) : (
-              sortedLogs.map((log) => (
+              displayLogs.map((log) => (
                 <TableRow key={log.id}>
                   {visibleColumns.map(column => (
                     <TableCell key={column}>
@@ -541,67 +543,68 @@ export function LogTable({ logs: realtimeLogs }: LogTableProps) {
         </Table>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          Total {totalLogs} entries
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setCurrentPage(1)}
-            disabled={currentPage === 1 || loading}
-          >
-            <ChevronsLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            disabled={currentPage === 1 || loading}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          
-          <div className="flex gap-1">
-            {getPageRange().map((page, index) => {
-              if (page === '...') {
-                return <span key={`dots-${index}`} className="px-2 py-1 text-muted-foreground">...</span>;
-              }
-              return (
-                <Button
-                  key={page}
-                  variant={currentPage === page ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={() => setCurrentPage(page as number)}
-                  disabled={loading}
-                  className="min-w-[40px]"
-                >
-                  {page}
-                </Button>
-              );
-            })}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Total {totalLogs} entries
           </div>
           
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            disabled={currentPage === totalPages || loading}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon" 
-            onClick={() => setCurrentPage(totalPages)}
-            disabled={currentPage === totalPages || loading}
-          >
-            <ChevronsRight className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+            >
+              <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            <div className="flex gap-1">
+              {getPageRange().map((page, index) => {
+                if (page === '...') {
+                  return <span key={`dots-${index}`} className="px-2 py-1 text-muted-foreground">...</span>;
+                }
+                return (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? "secondary" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(page as number)}
+                    className="min-w-[40px]"
+                  >
+                    {page}
+                  </Button>
+                );
+              })}
+            </div>
+            
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon" 
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronsRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
