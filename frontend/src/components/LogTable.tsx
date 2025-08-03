@@ -47,6 +47,7 @@ import { useState, useMemo, useEffect } from "react";
 interface LogTableProps {
   logs: LogEntry[];
   isConnected: boolean;
+  isLoading: boolean; // Add loading state
 }
 
 type SortColumn = keyof LogEntry;
@@ -54,7 +55,7 @@ type SortDirection = 'asc' | 'desc' | null;
 
 export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(200);
   const [hideUnknown, setHideUnknown] = useState(false);
   const [hidePrivateIPs, setHidePrivateIPs] = useState(false);
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
