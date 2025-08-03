@@ -2,7 +2,13 @@ services:
   backend:
     restart: always
     environment:
-      - NODE_ENV=production
+      - PORT=3001
+      - TRAEFIK_LOG_FILE=/logs/access.log
+      - USE_MAXMIND=true
+      - MAXMIND_DB_PATH=/maxmind/GeoLite2-City.mmdb
+      - MAXMIND_FALLBACK_ONLINE=true
+      - GOGC=50
+      - GOMEMLIMIT=500MiB
     deploy:
       resources:
         limits:

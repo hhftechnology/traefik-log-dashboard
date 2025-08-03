@@ -3,9 +3,13 @@ services:
     build: ./backend
     container_name: ${BACKEND_CONTAINER_NAME:-traefik-dashboard-backend}
     environment:
-      - NODE_ENV=production
       - PORT=3001
-      - TRAEFIK_LOG_FILE=/logs/traefik.log
+      - TRAEFIK_LOG_FILE=/logs/access.log
+      - USE_MAXMIND=true
+      - MAXMIND_DB_PATH=/maxmind/GeoLite2-City.mmdb
+      - MAXMIND_FALLBACK_ONLINE=true
+      - GOGC=50
+      - GOMEMLIMIT=500MiB
     volumes:
       # Mount your Traefik log file or directory here
       - ${TRAEFIK_LOG_PATH:-./logs}:/logs:ro

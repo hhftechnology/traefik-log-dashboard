@@ -92,6 +92,40 @@ Monitor logs from multiple Traefik instances:
     BACKEND_CONTAINER_NAME=my-traefik-backend
     FRONTEND_CONTAINER_NAME=my-traefik-frontend
     ```
+  ```yml
+  backend:
+    image: ghcr.io/hhftechnology/traefik-log-dashboard-backend:latest
+    container_name: log-dashboard-backend
+    restart: unless-stopped
+    volumes:
+      - ./config/traefik/logs:/logs:ro # Mount the Traefik logs directory
+      - ./config/maxmind:/maxmind # Mount the Traefik logs directory
+    environment:
+      - PORT=3001
+      - TRAEFIK_LOG_FILE=/logs/access.log
+      - USE_MAXMIND=true
+      - MAXMIND_DB_PATH=/maxmind/GeoLite2-City.mmdb
+      - MAXMIND_FALLBACK_ONLINE=true
+      - GOGC=50
+      - GOMEMLIMIT=500MiB
+
+  frontend:
+    image: ghcr.io/hhftechnology/traefik-log-dashboard-frontend:latest
+    container_name: log-dashboard-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+  ```
 
 3.  **Build and run**
 
