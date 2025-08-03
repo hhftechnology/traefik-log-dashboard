@@ -232,10 +232,9 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
   }, [realtimeLogs.length, autoScroll]);
 
   // Calculate display logs for current page
-const startIndex = 0;
-const endIndex = Math.min(pageSize, filteredLogs.length);
-// const displayLogs = sortedLogs.slice(startIndex, endIndex);
-   const displayLogs = filteredLogs;
+  const startIndex = Math.max(0, (currentPage - 1) * pageSize);
+  const endIndex = Math.min(startIndex + pageSize, totalLogs);
+  const displayLogs = sortedLogs.slice(startIndex, endIndex);
 
   // Reset to first page when filters change
   useEffect(() => {
@@ -461,7 +460,7 @@ const endIndex = Math.min(pageSize, filteredLogs.length);
               </Badge>
             )}
             <span className="text-xs text-muted-foreground">
-              Showing {startIndex + 1} to {endIndex} of {filteredLogs.length} filtered logs (Total: {realtimeLogs.length})
+              {totalLogs} filtered logs (Total: {realtimeLogs.length})
             </span>
           </div>
         </div>
@@ -515,8 +514,6 @@ const endIndex = Math.min(pageSize, filteredLogs.length);
                 <SelectItem value="50">50</SelectItem>
                 <SelectItem value="100">100</SelectItem>
                 <SelectItem value="200">200</SelectItem>
-                <SelectItem value="500">500</SelectItem>
-                <SelectItem value="1000">1000</SelectItem>
               </SelectContent>
             </Select>
             <span className="text-sm text-muted-foreground">entries</span>
