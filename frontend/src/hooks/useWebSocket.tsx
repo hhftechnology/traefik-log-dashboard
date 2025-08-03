@@ -167,22 +167,18 @@ export function useWebSocket() {
       console.log('Connecting to WebSocket:', wsUrl);
       ws.current = new WebSocket(wsUrl);
 
-ws.current.onopen = () => {
-  console.log('WebSocket connected successfully');
-  setIsConnected(true);
-  reconnectAttempts.current = 0;
-  
-  if (reconnectTimeout.current) {
-    clearTimeout(reconnectTimeout.current);
-    reconnectTimeout.current = null;
-  }
-
-  // Request initial logs with large limit
-  sendMessage({ 
-    type: 'getLogs', 
-    params: { limit: MAX_LOGS_IN_MEMORY } 
-  });
-};
+      ws.current.onopen = () => {
+        if (!mounted.current) return;
+        
+        console.log('WebSocket connected successfully');
+        setIsConnected(true);
+        reconnectAttempts.current = 0;
+        
+        if (reconnectTimeout.current) {
+          clearTimeout(reconnectTimeout.current);
+          reconnectTimeout.current = null;
+        }
+      };
 
       ws.current.onmessage = (event) => {
         if (!mounted.current) return;

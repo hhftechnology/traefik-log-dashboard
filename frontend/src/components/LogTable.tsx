@@ -47,7 +47,6 @@ import { useState, useMemo, useEffect } from "react";
 interface LogTableProps {
   logs: LogEntry[];
   isConnected: boolean;
-  isLoading: boolean; // Add loading state
 }
 
 type SortColumn = keyof LogEntry;
