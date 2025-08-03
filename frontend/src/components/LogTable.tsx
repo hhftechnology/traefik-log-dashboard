@@ -54,15 +54,40 @@ type SortColumn = keyof LogEntry;
 type SortDirection = 'asc' | 'desc' | null;
 
 export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
+  // Load preferences from localStorage with defaults
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(200);
-  const [hideUnknown, setHideUnknown] = useState(false);
-  const [hidePrivateIPs, setHidePrivateIPs] = useState(false);
-  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
-  const [pathTruncateLength, setPathTruncateLength] = useState(50);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem('traefik-dashboard-page-size');
+    return saved ? parseInt(saved) : 200;
+  });
+  const [hideUnknown, setHideUnknown] = useState(() => {
+    const saved = localStorage.getItem('traefik-dashboard-hide-unknown');
+    return saved === 'true';
+  });
+  const [hidePrivateIPs, setHidePrivateIPs] = useState(() => {
+    const saved = localStorage.getItem('traefik-dashboard-hide-private-ips');
+    return saved === 'true';
+  });
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(() => {
+    const saved = localStorage.getItem('traefik-dashboard-sort-column');
+    return saved || null;
+  });
+  const [sortDirection, setSortDirection] = useState<SortDirection | null>(() => {
+    const saved = localStorage.getItem('traefik-dashboard-sort-direction');
+    return (saved as SortDirection) || null;
+  });
+  const [pathTruncateLength, setPathTruncateLength] = useState(() => {
+    const saved = localStorage.getItem('traefik-dashboard-path-length');
+    return saved ? parseInt(saved) : 50;
+  });
+  const [autoScroll, setAutoScroll] = useState(() => {
+    const saved = localStorage.getItem('traefik-dashboard-auto-scroll');
+    return saved === 'true';
+  });
+  const [showDebugInfo, setShowDebugInfo] = useState(() => {
+    const saved = localStorage.getItem('traefik-dashboard-show-debug');
+    return saved === 'true';
+  });
 
   // Debug: Log when logs prop changes
   useEffect(() => {
@@ -70,55 +95,110 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
   }, [realtimeLogs.length]);
 
   // Column visibility state - show essential columns by default
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
-    timestamp: true,
-    clientIP: true,
-    method: true,
-    path: true,
-    status: true,
-    responseTime: true,
-    serviceName: true,
-    routerName: true,
-    requestAddr: true,
-    requestHost: true,
-    size: true,
-    country: true,
-    // Hide less important columns by default
-    id: false,
-    host: false,
-    userAgent: false,
-    city: false,
-    countryCode: false,
-    lat: false,
-    lon: false,
-    // Hide all detailed fields by default
-    StartUTC: false,
-    StartLocal: false,
-    Duration: false,
-    ServiceURL: false,
-    ServiceAddr: false,
-    ClientHost: false,
-    ClientPort: false,
-    ClientUsername: false,
-    RequestPort: false,
-    RequestProtocol: false,
-    RequestScheme: false,
-    RequestLine: false,
-    RequestContentSize: false,
-    OriginDuration: false,
-    OriginContentSize: false,
-    OriginStatus: false,
-    DownstreamStatus: false,
-    RequestCount: false,
-    GzipRatio: false,
-    Overhead: false,
-    RetryAttempts: false,
-    TLSVersion: false,
-    TLSCipher: false,
-    TLSClientSubject: false,
-    TraceId: false,
-    SpanId: false,
+  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('traefik-dashboard-column-visibility');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.warn('Failed to parse column visibility from localStorage');
+      }
+    }
+    return {
+      timestamp: true,
+      clientIP: true,
+      method: true,
+      path: true,
+      status: true,
+      responseTime: true,
+      serviceName: true,
+      routerName: true,
+      requestAddr: true,
+      requestHost: true,
+      size: true,
+      country: true,
+      // Hide less important columns by default
+      id: false,
+      host: false,
+      userAgent: false,
+      city: false,
+      countryCode: false,
+      lat: false,
+      lon: false,
+      // Hide all detailed fields by default
+      StartUTC: false,
+      StartLocal: false,
+      Duration: false,
+      ServiceURL: false,
+      ServiceAddr: false,
+      ClientHost: false,
+      ClientPort: false,
+      ClientUsername: false,
+      RequestPort: false,
+      RequestProtocol: false,
+      RequestScheme: false,
+      RequestLine: false,
+      RequestContentSize: false,
+      OriginDuration: false,
+      OriginContentSize: false,
+      OriginStatus: false,
+      DownstreamStatus: false,
+      RequestCount: false,
+      GzipRatio: false,
+      Overhead: false,
+      RetryAttempts: false,
+      TLSVersion: false,
+      TLSCipher: false,
+      TLSClientSubject: false,
+      TraceId: false,
+      SpanId: false,
+    };
   });
+
+  // Save preferences to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('traefik-dashboard-page-size', pageSize.toString());
+  }, [pageSize]);
+
+  useEffect(() => {
+    localStorage.setItem('traefik-dashboard-hide-unknown', hideUnknown.toString());
+  }, [hideUnknown]);
+
+  useEffect(() => {
+    localStorage.setItem('traefik-dashboard-hide-private-ips', hidePrivateIPs.toString());
+  }, [hidePrivateIPs]);
+
+  useEffect(() => {
+    if (sortColumn) {
+      localStorage.setItem('traefik-dashboard-sort-column', sortColumn);
+    } else {
+      localStorage.removeItem('traefik-dashboard-sort-column');
+    }
+  }, [sortColumn]);
+
+  useEffect(() => {
+    if (sortDirection) {
+      localStorage.setItem('traefik-dashboard-sort-direction', sortDirection);
+    } else {
+      localStorage.removeItem('traefik-dashboard-sort-direction');
+    }
+  }, [sortDirection]);
+
+  useEffect(() => {
+    localStorage.setItem('traefik-dashboard-path-length', pathTruncateLength.toString());
+  }, [pathTruncateLength]);
+
+  useEffect(() => {
+    localStorage.setItem('traefik-dashboard-auto-scroll', autoScroll.toString());
+  }, [autoScroll]);
+
+  useEffect(() => {
+    localStorage.setItem('traefik-dashboard-show-debug', showDebugInfo.toString());
+  }, [showDebugInfo]);
+
+  useEffect(() => {
+    localStorage.setItem('traefik-dashboard-column-visibility', JSON.stringify(columnVisibility));
+  }, [columnVisibility]);
 
   const columnNames: Record<string, string> = {
     id: 'ID',
@@ -481,9 +561,6 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
                 Disconnected
               </Badge>
             )}
-            <span className="text-xs text-muted-foreground">
-              {totalLogs} filtered logs (Total: {realtimeLogs.length})
-            </span>
           </div>
         </div>
         
@@ -554,6 +631,7 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
           <div className="flex items-center gap-2 mb-2">
             <Info className="h-4 w-4" />
             <span className="font-semibold">Debug Information</span>
+            <span className="text-xs text-muted-foreground">(Settings are automatically saved)</span>
           </div>
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
@@ -579,6 +657,18 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
             </div>
             <div>
               <strong>Connection status:</strong> {isConnected ? 'Connected' : 'Disconnected'}
+            </div>
+            <div>
+              <strong>Hide unknown:</strong> {hideUnknown ? 'Yes' : 'No'}
+            </div>
+            <div>
+              <strong>Hide private IPs:</strong> {hidePrivateIPs ? 'Yes' : 'No'}
+            </div>
+            <div>
+              <strong>Auto-scroll:</strong> {autoScroll ? 'Enabled' : 'Disabled'}
+            </div>
+            <div>
+              <strong>Sort:</strong> {sortColumn ? `${sortColumn} ${sortDirection}` : 'None'}
             </div>
           </div>
         </div>
