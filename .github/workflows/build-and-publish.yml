@@ -1,15 +1,15 @@
+# This workflow builds and pushes multi-platform (linux/amd64, linux/arm64)
+# Docker images to both Docker Hub and GitHub Container Registry.
+
 name: Build and Push Docker Images
 
 on:
   push:
     branches: [ dev ]
+    # Triggers on git tags like v1.0.0
     tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ dev ]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push:
@@ -19,6 +19,7 @@ jobs:
       packages: write
 
     strategy:
+      # Build images for both backend and frontend services in parallel
       matrix:
         service: [backend, frontend]
 
@@ -26,42 +27,63 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Add this step to set up QEMU for multi-arch builds
+      # Set up QEMU to enable emulation for multi-architecture builds
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
+      # Set up Docker Buildx, a CLI plugin for extended build capabilities
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to the Container registry
+      # Log in to Docker Hub using secrets
+      - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          # Your Docker Hub username, stored as a GitHub secret
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          # Your Docker Hub access token, stored as a GitHub secret
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Log in to GitHub Container Registry
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
+      # Extract metadata (tags and labels) for the Docker image
+      - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          # Construct the full image names for both registries
+          images: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-${{ matrix.service }}
+            ghcr.io/${{ github.repository }}-${{ matrix.service }}
           tags: |
+            # Tag with the git branch name on push to a branch
             type=ref,event=branch
+            # Tag with 'pr-#' on pull requests
             type=ref,event=pr
+            # Tag with the semantic version (e.g., v1.2.3, v1.2, v1) on git tag events
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+            # Tag with the git SHA
             type=sha
 
+      # Build the image for multiple platforms and push to both registries
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./${{ matrix.service }}
-          # Add the platforms key to build for amd64 and arm64
-          platforms: linux/amd64, linux/arm64
+          # Build for both amd64 and arm64 architectures
+          platforms: linux/amd64,linux/arm64
+          # Push the image only when the event is not a pull request
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Use GitHub Actions cache for faster builds
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
