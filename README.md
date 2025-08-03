@@ -23,7 +23,7 @@ A real-time dashboard for analyzing Traefik logs with IP geolocation, status cod
   - **IPv6 Address Support**: Proper handling of IPv6 addresses.
   - **Multiple Log Paths Support**: Monitor multiple Traefik instances simultaneously.
 
-## New Features in v1.0.3
+## New Features
 
 ### 1. Filter Unknown Service/Router Names
 When using Traefik with strict SNI, bot traffic accessing services by IP address results in entries with "unknown" service/router names. You can now filter these out:
