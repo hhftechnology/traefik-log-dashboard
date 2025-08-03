@@ -232,8 +232,8 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
   }, [realtimeLogs.length, autoScroll]);
 
   // Calculate display logs for current page
-  const startIndex = Math.max(0, (currentPage - 1) * pageSize);
-  const endIndex = Math.min(startIndex + pageSize, totalLogs);
+const startIndex = 0;
+const endIndex = Math.min(pageSize, filteredLogs.length);
   const displayLogs = sortedLogs.slice(startIndex, endIndex);
 
   // Reset to first page when filters change
@@ -460,7 +460,7 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
               </Badge>
             )}
             <span className="text-xs text-muted-foreground">
-              {totalLogs} filtered logs (Total: {realtimeLogs.length})
+              Showing {startIndex + 1} to {endIndex} of {filteredLogs.length} filtered logs (Total: {realtimeLogs.length})
             </span>
           </div>
         </div>
