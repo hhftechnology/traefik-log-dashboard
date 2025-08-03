@@ -70,7 +70,11 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
   });
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(() => {
     const saved = localStorage.getItem('traefik-dashboard-sort-column');
-    return saved || null;
+    // Only use saved if it is a valid key of LogEntry
+    if (saved && saved in ({} as LogEntry)) {
+      return saved as SortColumn;
+    }
+    return null;
   });
   const [sortDirection, setSortDirection] = useState<SortDirection | null>(() => {
     const saved = localStorage.getItem('traefik-dashboard-sort-direction');
