@@ -40,7 +40,8 @@ import {
   ChevronsRight, 
   Settings,
   Wifi,
-  WifiOff
+  WifiOff,
+  Info
 } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 
@@ -61,6 +62,12 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
   const [sortDirection, setSortDirection] = useState<SortDirection | null>(null);
   const [pathTruncateLength, setPathTruncateLength] = useState(50);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+
+  // Debug: Log when logs prop changes
+  useEffect(() => {
+    console.log(`[LogTable] Received ${realtimeLogs.length} logs from WebSocket`);
+  }, [realtimeLogs.length]);
 
   // Column visibility state - show essential columns by default
   const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>({
@@ -192,6 +199,7 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
       return true;
     });
     
+    console.log(`[LogTable] Filtered ${realtimeLogs.length} -> ${filtered.length} logs (hideUnknown: ${hideUnknown}, hidePrivateIPs: ${hidePrivateIPs})`);
     return filtered;
   }, [realtimeLogs, hideUnknown, hidePrivateIPs]);
 
@@ -217,6 +225,7 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
       return 0;
     });
     
+    console.log(`[LogTable] Sorted ${filteredLogs.length} logs by ${sortColumn} ${sortDirection}`);
     return sorted;
   }, [filteredLogs, sortColumn, sortDirection]);
 
@@ -235,6 +244,8 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
   const startIndex = Math.max(0, (currentPage - 1) * pageSize);
   const endIndex = Math.min(startIndex + pageSize, totalLogs);
   const displayLogs = sortedLogs.slice(startIndex, endIndex);
+
+  console.log(`[LogTable] Displaying ${displayLogs.length} logs (page ${currentPage}/${totalPages}, range ${startIndex}-${endIndex})`);
 
   // Reset to first page when filters change
   useEffect(() => {
@@ -446,6 +457,17 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
               Auto-scroll to new logs
             </Label>
           </div>
+
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="debug-info" 
+              checked={showDebugInfo}
+              onCheckedChange={(checked) => setShowDebugInfo(checked as boolean)}
+            />
+            <Label htmlFor="debug-info" className="text-sm font-normal cursor-pointer">
+              Show debug info
+            </Label>
+          </div>
           
           <div className="flex items-center gap-2">
             {isConnected ? (
@@ -514,6 +536,8 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
                 <SelectItem value="50">50</SelectItem>
                 <SelectItem value="100">100</SelectItem>
                 <SelectItem value="200">200</SelectItem>
+                <SelectItem value="500">500</SelectItem>
+                <SelectItem value="1000">1000</SelectItem>
               </SelectContent>
             </Select>
             <span className="text-sm text-muted-foreground">entries</span>
@@ -524,6 +548,41 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
           </div>
         </div>
       </div>
+
+      {showDebugInfo && (
+        <div className="bg-muted p-4 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <Info className="h-4 w-4" />
+            <span className="font-semibold">Debug Information</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <strong>Raw logs from WebSocket:</strong> {realtimeLogs.length}
+            </div>
+            <div>
+              <strong>After filtering:</strong> {filteredLogs.length}
+            </div>
+            <div>
+              <strong>After sorting:</strong> {sortedLogs.length}
+            </div>
+            <div>
+              <strong>Current page:</strong> {currentPage} / {totalPages}
+            </div>
+            <div>
+              <strong>Page size:</strong> {pageSize}
+            </div>
+            <div>
+              <strong>Display range:</strong> {startIndex + 1} - {endIndex}
+            </div>
+            <div>
+              <strong>Actually displaying:</strong> {displayLogs.length}
+            </div>
+            <div>
+              <strong>Connection status:</strong> {isConnected ? 'Connected' : 'Disconnected'}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-md border">
         <Table>

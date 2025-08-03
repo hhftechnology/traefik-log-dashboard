@@ -230,8 +230,8 @@ func (c *WebSocketClient) sendInitialData() {
 	log.Printf("[WebSocket] Sending initial stats to client %s", c.clientID)
 	c.sendStats()
 
-	// Send recent logs
-	result := c.logParser.GetLogs(LogsParams{Page: 1, Limit: 50})
+	// Send recent logs - INCREASED FROM 50 TO 1000
+	result := c.logParser.GetLogs(LogsParams{Page: 1, Limit: 1000})
 	log.Printf("[WebSocket] Sending %d initial logs to client %s", len(result.Logs), c.clientID)
 	c.sendMessage(WebSocketMessage{
 		Type: "logs",
@@ -248,7 +248,7 @@ func (c *WebSocketClient) handleMessage(msg WebSocketMessage) {
 	
 	switch msg.Type {
 	case "getLogs":
-		params := LogsParams{Page: 1, Limit: 50}
+		params := LogsParams{Page: 1, Limit: 1000} // INCREASED DEFAULT FROM 50 TO 1000
 		if msg.Params != nil {
 			if p, err := json.Marshal(msg.Params); err == nil {
 				json.Unmarshal(p, &params)
@@ -344,7 +344,7 @@ func (c *WebSocketClient) sendNewLogWithStats(log LogEntry) {
 		})
 		// Also send fresh stats and logs after clear
 		c.sendStats()
-		result := c.logParser.GetLogs(LogsParams{Page: 1, Limit: 50})
+		result := c.logParser.GetLogs(LogsParams{Page: 1, Limit: 1000}) // INCREASED FROM 50 TO 1000
 		c.sendMessage(WebSocketMessage{
 			Type: "logs",
 			Data: result.Logs,
