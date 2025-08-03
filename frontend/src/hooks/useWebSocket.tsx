@@ -93,164 +93,90 @@ export interface Stats {
   topRouters: Array<{ router: string; count: number }>;
   topRequestAddrs: Array<{ addr: string; count: number }>;
   topRequestHosts: Array<{ host: string; count: number }>;
-  totalDataTransmitted: number;   // Total bytes transmitted
-  oldestLogTime: string;          // Oldest log timestamp
-  newestLogTime: string;          // Newest log timestamp
-  analysisPeriod: string;         // Human readable period
+  totalDataTransmitted: number;
+  oldestLogTime: string;
+  newestLogTime: string;
+  analysisPeriod: string;
 }
 
 interface WebSocketMessage {
-  type: 'newLog' | 'logs' | 'stats' | 'geoStats' | 'clear' | 'geoDataUpdated';
+  type: 'newLog' | 'logs' | 'stats' | 'geoStats' | 'clear' | 'geoDataUpdated' | 'geoProcessingStatus';
   data: any;
-  stats?: Stats; // Optional stats field for bundled updates
+  stats?: Stats;
 }
 
-// Helper function to update stats with a new log entry (fallback for edge cases)
-function updateStatsWithNewLog(currentStats: Stats | null, newLog: LogEntry): Stats {
-  if (!currentStats) {
-    // Initialize basic stats if none exist
-    return {
-      totalRequests: 1,
-      statusCodes: { [newLog.status]: 1 },
-      services: { [newLog.serviceName]: 1 },
-      routers: { [newLog.routerName]: 1 },
-      methods: { [newLog.method]: 1 },
-      avgResponseTime: newLog.responseTime,
-      requests5xx: newLog.status >= 500 ? 1 : 0,
-      requests4xx: newLog.status >= 400 && newLog.status < 500 ? 1 : 0,
-      requests2xx: newLog.status >= 200 && newLog.status < 300 ? 1 : 0,
-      requestsPerSecond: 0,
-      topIPs: newLog.clientIP ? [{ ip: newLog.clientIP, count: 1 }] : [],
-      topCountries: newLog.country && newLog.countryCode ? [{ country: newLog.country, countryCode: newLog.countryCode, count: 1 }] : [],
-      topRouters: [{ router: newLog.routerName, count: 1 }],
-      topRequestAddrs: newLog.requestAddr ? [{ addr: newLog.requestAddr, count: 1 }] : [],
-      topRequestHosts: newLog.requestHost ? [{ host: newLog.requestHost, count: 1 }] : [],
-      totalDataTransmitted: typeof newLog.size === 'number' ? newLog.size : 0,
-      oldestLogTime: newLog.timestamp,
-      newestLogTime: newLog.timestamp,
-      analysisPeriod: '', // You can update this as needed elsewhere
-    };
-  }
-
-  // Create updated stats
-  const updatedStats: Stats = {
-    ...currentStats,
-    totalRequests: currentStats.totalRequests + 1,
-    statusCodes: {
-      ...currentStats.statusCodes,
-      [newLog.status]: (currentStats.statusCodes[newLog.status] || 0) + 1
-    },
-    services: {
-      ...currentStats.services,
-      [newLog.serviceName]: (currentStats.services[newLog.serviceName] || 0) + 1
-    },
-    routers: {
-      ...currentStats.routers,
-      [newLog.routerName]: (currentStats.routers[newLog.routerName] || 0) + 1
-    },
-    methods: {
-      ...currentStats.methods,
-      [newLog.method]: (currentStats.methods[newLog.method] || 0) + 1
-    }
-  };
-
-  // Update status code counters
-  if (newLog.status >= 500) {
-    updatedStats.requests5xx = currentStats.requests5xx + 1;
-  } else if (newLog.status >= 400) {
-    updatedStats.requests4xx = currentStats.requests4xx + 1;
-  } else if (newLog.status >= 200 && newLog.status < 300) {
-    updatedStats.requests2xx = currentStats.requests2xx + 1;
-  }
-
-  // Update average response time
-  updatedStats.avgResponseTime = (
-    (currentStats.avgResponseTime * currentStats.totalRequests + newLog.responseTime) / 
-    updatedStats.totalRequests
-  );
-
-  // Update top IPs
-  if (newLog.clientIP) {
-    const existingIP = updatedStats.topIPs.find(ip => ip.ip === newLog.clientIP);
-    if (existingIP) {
-      existingIP.count += 1;
-    } else {
-      updatedStats.topIPs.push({ ip: newLog.clientIP, count: 1 });
-    }
-    updatedStats.topIPs.sort((a, b) => b.count - a.count);
-    updatedStats.topIPs = updatedStats.topIPs.slice(0, 10); // Keep top 10
-  }
-
-  // Update top countries
-  if (newLog.country && newLog.countryCode) {
-    const existingCountry = updatedStats.topCountries.find(c => c.countryCode === newLog.countryCode);
-    if (existingCountry) {
-      existingCountry.count += 1;
-    } else {
-      updatedStats.topCountries.push({ 
-        country: newLog.country, 
-        countryCode: newLog.countryCode, 
-        count: 1 
-      });
-    }
-    updatedStats.topCountries.sort((a, b) => b.count - a.count);
-  }
-
-  // Update top routers
-  const existingRouter = updatedStats.topRouters.find(r => r.router === newLog.routerName);
-  if (existingRouter) {
-    existingRouter.count += 1;
-  } else {
-    updatedStats.topRouters.push({ router: newLog.routerName, count: 1 });
-  }
-  updatedStats.topRouters.sort((a, b) => b.count - a.count);
-  updatedStats.topRouters = updatedStats.topRouters.slice(0, 10);
-
-  // Update top request addresses
-  if (newLog.requestAddr) {
-    const existingAddr = updatedStats.topRequestAddrs.find(a => a.addr === newLog.requestAddr);
-    if (existingAddr) {
-      existingAddr.count += 1;
-    } else {
-      updatedStats.topRequestAddrs.push({ addr: newLog.requestAddr, count: 1 });
-    }
-    updatedStats.topRequestAddrs.sort((a, b) => b.count - a.count);
-    updatedStats.topRequestAddrs = updatedStats.topRequestAddrs.slice(0, 10);
-  }
-
-  // Update top request hosts
-  if (newLog.requestHost) {
-    const existingHost = updatedStats.topRequestHosts.find(h => h.host === newLog.requestHost);
-    if (existingHost) {
-      existingHost.count += 1;
-    } else {
-      updatedStats.topRequestHosts.push({ host: newLog.requestHost, count: 1 });
-    }
-    updatedStats.topRequestHosts.sort((a, b) => b.count - a.count);
-    updatedStats.topRequestHosts = updatedStats.topRequestHosts.slice(0, 10);
-  }
-
-  return updatedStats;
-}
+// Maximum logs to keep in memory (prevent unbounded growth)
+const MAX_LOGS_IN_MEMORY = 10000;
 
 export function useWebSocket() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [geoDataVersion, setGeoDataVersion] = useState(0); // Track geo data updates
+  const [geoDataVersion, setGeoDataVersion] = useState(0);
+  
   const ws = useRef<WebSocket | null>(null);
   const reconnectTimeout = useRef<NodeJS.Timeout | null>(null);
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 10;
+  const baseReconnectDelay = 1000; // Start with 1 second
+  const mounted = useRef(true);
+
+  // Use callbacks to avoid stale closures
+  const updateLogs = useCallback((newLog: LogEntry) => {
+    if (!mounted.current) return;
+    
+    setLogs(prevLogs => {
+      // Add new log at the beginning and limit total size
+      const updated = [newLog, ...prevLogs].slice(0, MAX_LOGS_IN_MEMORY);
+      console.log(`[WebSocket] Added new log. Total logs: ${updated.length}`);
+      return updated;
+    });
+  }, []);
+
+  const setLogsDirectly = useCallback((newLogs: LogEntry[]) => {
+    if (!mounted.current) return;
+    
+    const trimmedLogs = newLogs.slice(0, MAX_LOGS_IN_MEMORY);
+    console.log(`[WebSocket] Set logs directly. Received: ${newLogs.length}, Keeping: ${trimmedLogs.length}`);
+    setLogs(trimmedLogs);
+  }, []);
+
+  const updateStats = useCallback((newStats: Stats) => {
+    if (!mounted.current) return;
+    
+    setStats(newStats);
+  }, []);
+
+  const clearData = useCallback(() => {
+    if (!mounted.current) return;
+    
+    setLogs([]);
+    setStats(null);
+    setGeoDataVersion(0);
+    console.log('[WebSocket] Cleared all data');
+  }, []);
 
   const connect = useCallback(() => {
+    if (!mounted.current) return;
+    
+    if (ws.current?.readyState === WebSocket.OPEN) {
+      return; // Already connected
+    }
+
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws`;
       
+      console.log('[WebSocket] Connecting to:', wsUrl);
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
-        console.log('WebSocket connected');
+        if (!mounted.current) return;
+        
+        console.log('[WebSocket] Connected successfully');
         setIsConnected(true);
+        reconnectAttempts.current = 0;
+        
         if (reconnectTimeout.current) {
           clearTimeout(reconnectTimeout.current);
           reconnectTimeout.current = null;
@@ -258,102 +184,139 @@ export function useWebSocket() {
       };
 
       ws.current.onmessage = (event) => {
-        const message: WebSocketMessage = JSON.parse(event.data);
+        if (!mounted.current) return;
         
-        switch (message.type) {
-          case 'newLog':
-            setLogs(prev => [message.data, ...prev].slice(0, 1000));
-            
-            // Use bundled stats if available (preferred), otherwise calculate locally
-            if (message.stats) {
-              console.log('Received real-time stats with new log:', message.stats);
-              setStats(message.stats);
-            } else {
-              // Fallback to local calculation if stats not bundled
-              console.log('No bundled stats, calculating locally');
-              setStats(prevStats => updateStatsWithNewLog(prevStats, message.data));
-            }
-            break;
-            
-          case 'logs':
-            if (Array.isArray(message.data)) {
-              setLogs(message.data);
-            } else if (Array.isArray(message.data.logs)) {
-              setLogs(message.data.logs);
-            }
-            break;
-            
-          case 'stats':
-            setStats(message.data);
-            break;
-            
-          case 'geoStats':
-            // Update geography data in stats
-            setStats(prevStats => {
-              if (!prevStats) return prevStats;
-              return {
-                ...prevStats,
-                topCountries: message.data.countries || prevStats.topCountries
-              };
-            });
-            // Increment geo data version to trigger re-renders
-            setGeoDataVersion(prev => prev + 1);
-            break;
-            
-          case 'geoDataUpdated':
-            // Handle immediate geo data updates from MaxMind reload
-            console.log('Received geo data update notification:', message.data);
-            // Force a geo data version increment to trigger map re-render
-            setGeoDataVersion(prev => prev + 1);
-            // Request fresh geo stats
-            sendMessage({ type: 'getGeoStats' });
-            sendMessage({ type: 'getStats' });
-            break;
-            
-          case 'clear':
-            setLogs([]);
-            setStats(null);
-            setGeoDataVersion(0);
-            break;
+        try {
+          const message: WebSocketMessage = JSON.parse(event.data);
+          
+          switch (message.type) {
+            case 'newLog':
+              updateLogs(message.data);
+              // Use bundled stats if available for real-time efficiency
+              if (message.stats) {
+                updateStats(message.stats);
+              }
+              break;
+              
+            case 'logs':
+              if (Array.isArray(message.data)) {
+                console.log(`[WebSocket] Received ${message.data.length} logs directly`);
+                setLogsDirectly(message.data);
+              } else if (Array.isArray(message.data?.logs)) {
+                console.log(`[WebSocket] Received ${message.data.logs.length} logs in result object`);
+                setLogsDirectly(message.data.logs);
+              } else {
+                console.warn('[WebSocket] Received logs message but data is not an array:', message.data);
+              }
+              break;
+              
+            case 'stats':
+              updateStats(message.data);
+              break;
+              
+            case 'geoStats':
+              setStats(prevStats => {
+                if (!prevStats) return prevStats;
+                return {
+                  ...prevStats,
+                  topCountries: message.data.countries || prevStats.topCountries
+                };
+              });
+              setGeoDataVersion(prev => prev + 1);
+              break;
+              
+            case 'geoDataUpdated':
+              console.log('[WebSocket] Received geo data update notification');
+              setGeoDataVersion(prev => prev + 1);
+              sendMessage({ type: 'getGeoStats' });
+              sendMessage({ type: 'getStats' });
+              break;
+              
+            case 'geoProcessingStatus':
+              // Handle geo processing status if needed
+              break;
+              
+            case 'clear':
+              clearData();
+              break;
+              
+            default:
+              console.warn('[WebSocket] Unknown message type:', message.type);
+          }
+        } catch (error) {
+          console.error('[WebSocket] Error parsing message:', error);
         }
       };
 
-      ws.current.onclose = () => {
-        console.log('WebSocket disconnected');
+      ws.current.onclose = (event) => {
+        if (!mounted.current) return;
+        
+        console.log('[WebSocket] Disconnected:', event.code, event.reason);
         setIsConnected(false);
-        reconnectTimeout.current = setTimeout(connect, 3000);
+        
+        // Attempt to reconnect with exponential backoff
+        if (reconnectAttempts.current < maxReconnectAttempts) {
+          const delay = Math.min(
+            baseReconnectDelay * Math.pow(2, reconnectAttempts.current),
+            30000 // Max 30 seconds
+          );
+          
+          console.log(`[WebSocket] Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`);
+          
+          reconnectTimeout.current = setTimeout(() => {
+            if (mounted.current) {
+              reconnectAttempts.current += 1;
+              connect();
+            }
+          }, delay);
+        } else {
+          console.error('[WebSocket] Max reconnection attempts reached');
+        }
       };
 
       ws.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[WebSocket] Error:', error);
       };
     } catch (error) {
-      console.error('Failed to connect WebSocket:', error);
+      console.error('[WebSocket] Failed to connect:', error);
     }
-  }, []);
+  }, [updateLogs, setLogsDirectly, updateStats, clearData]);
 
   const sendMessage = useCallback((message: any) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      console.log('[WebSocket] Sending message:', message.type);
       ws.current.send(JSON.stringify(message));
+      return true;
+    } else {
+      console.warn('[WebSocket] Not connected, cannot send message:', message);
+      return false;
     }
   }, []);
 
   const requestLogs = useCallback((params: any) => {
-    sendMessage({ type: 'getLogs', params });
+    console.log('[WebSocket] Requesting logs with params:', params);
+    return sendMessage({ type: 'getLogs', params });
   }, [sendMessage]);
 
   const requestStats = useCallback(() => {
-    sendMessage({ type: 'getStats' });
+    console.log('[WebSocket] Requesting stats');
+    return sendMessage({ type: 'getStats' });
   }, [sendMessage]);
 
   const refreshGeoData = useCallback(() => {
-    sendMessage({ type: 'refreshGeoData' });
+    console.log('[WebSocket] Refreshing geo data');
+    return sendMessage({ type: 'refreshGeoData' });
   }, [sendMessage]);
 
+  // Connect on mount and cleanup on unmount
   useEffect(() => {
+    mounted.current = true;
     connect();
 
+    // Cleanup function
     return () => {
+      mounted.current = false;
+      
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
       }
@@ -363,13 +326,35 @@ export function useWebSocket() {
     };
   }, [connect]);
 
+  // Periodically check connection health
+  useEffect(() => {
+    const healthCheck = setInterval(() => {
+      if (mounted.current && !isConnected && ws.current?.readyState !== WebSocket.CONNECTING) {
+        console.log('[WebSocket] Health check: reconnecting...');
+        connect();
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(healthCheck);
+  }, [isConnected, connect]);
+
+  // Debug log current state periodically
+  useEffect(() => {
+    const debugLog = setInterval(() => {
+      console.log(`[WebSocket] Current state - Connected: ${isConnected}, Logs: ${logs.length}, Stats: ${stats ? 'loaded' : 'null'}`);
+    }, 30000); // Log every 30 seconds
+
+    return () => clearInterval(debugLog);
+  }, [isConnected, logs.length, stats]);
+
   return {
     logs,
     stats,
     isConnected,
-    geoDataVersion, // Expose geo data version for components that need to track updates
+    geoDataVersion,
     requestLogs,
     requestStats,
     refreshGeoData,
+    sendMessage,
   };
 }

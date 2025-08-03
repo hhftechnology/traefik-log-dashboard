@@ -25,7 +25,6 @@ type FileWatcher struct {
 	mu            sync.Mutex
 	checkInterval time.Duration
 	isInitialLoad bool
-	fileID        string  // Unique identifier for this file
 }
 
 func NewFileWatcher(filePath string, parser *LogParser) (*FileWatcher, error) {
@@ -87,9 +86,12 @@ func (fw *FileWatcher) Stop() {
 	close(fw.stopChan)
 	fw.watcher.Close()
 	
+	fw.mu.Lock()
 	if fw.file != nil {
 		fw.file.Close()
+		fw.file = nil
 	}
+	fw.mu.Unlock()
 }
 
 func (fw *FileWatcher) openFile() error {
@@ -99,6 +101,8 @@ func (fw *FileWatcher) openFile() error {
 	// Close existing file if open
 	if fw.file != nil {
 		fw.file.Close()
+		fw.file = nil
+		fw.reader = nil
 	}
 
 	// Check if file exists
@@ -106,7 +110,6 @@ func (fw *FileWatcher) openFile() error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			log.Printf("File %s does not exist yet", fw.filePath)
-			fw.file = nil
 			fw.lastPos = 0
 			fw.lastSize = 0
 			return nil
@@ -121,15 +124,16 @@ func (fw *FileWatcher) openFile() error {
 	}
 
 	fw.file = file
-	fw.reader = bufio.NewReader(file)
+	fw.reader = bufio.NewReaderSize(file, 64*1024) // 64KB buffer
 	fw.lastSize = info.Size()
 
 	// If this is a new file or the file was truncated, start from beginning
 	if fw.lastPos > info.Size() {
 		log.Printf("File %s was truncated, starting from beginning", fw.filePath)
 		fw.lastPos = 0
+		fw.parser.ClearLogs()
 	} else if fw.isInitialLoad {
-		// Initial load is handled by loadHistoricalLogs in LogParser
+		// Initial load is handled by loadRecentLogs in LogParser
 		// So we seek to end to only watch for new entries
 		fw.lastPos = info.Size()
 		file.Seek(fw.lastPos, io.SeekStart)
@@ -150,14 +154,19 @@ func (fw *FileWatcher) openFile() error {
 
 func (fw *FileWatcher) readNewLines() {
 	fw.mu.Lock()
-	if fw.file == nil {
+	if fw.file == nil || fw.reader == nil {
 		fw.mu.Unlock()
 		return
 	}
+	
+	// Create local references to avoid holding lock during read
 	reader := fw.reader
 	fw.mu.Unlock()
 
-	for {
+	linesRead := 0
+	const maxLinesPerRead = 1000 // Limit lines per read to prevent memory issues
+
+	for linesRead < maxLinesPerRead {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err != io.EOF {
@@ -166,16 +175,24 @@ func (fw *FileWatcher) readNewLines() {
 			break
 		}
 
+		linesRead++
+
 		// Update position
 		fw.mu.Lock()
-		pos, _ := fw.file.Seek(0, io.SeekCurrent)
-		fw.lastPos = pos
+		if fw.file != nil {
+			pos, _ := fw.file.Seek(0, io.SeekCurrent)
+			fw.lastPos = pos
+		}
 		fw.mu.Unlock()
 
 		// Parse the line
 		if line != "" && line != "\n" {
 			fw.parser.parseLine(line, true)
 		}
+	}
+
+	if linesRead >= maxLinesPerRead {
+		log.Printf("Read %d lines, pausing to prevent memory issues", linesRead)
 	}
 }
 
@@ -189,6 +206,7 @@ func (fw *FileWatcher) checkFile() {
 				log.Printf("File %s was deleted", fw.filePath)
 				fw.file.Close()
 				fw.file = nil
+				fw.reader = nil
 				fw.lastPos = 0
 				fw.lastSize = 0
 			}
@@ -203,14 +221,10 @@ func (fw *FileWatcher) checkFile() {
 	// File was recreated or appeared
 	if fw.file == nil {
 		fw.mu.Unlock()
-		log.Printf("File %s appeared/recreated, reloading from beginning", fw.filePath)
+		log.Printf("File %s appeared/recreated, reloading", fw.filePath)
 		// Clear existing logs since file was recreated
 		fw.parser.ClearLogs()
 		fw.openFile()
-		// Read entire file from beginning
-		fw.lastPos = 0
-		fw.file.Seek(0, io.SeekStart)
-		fw.reader = bufio.NewReader(fw.file)
 		fw.readNewLines()
 		return
 	}
@@ -220,25 +234,30 @@ func (fw *FileWatcher) checkFile() {
 		log.Printf("File %s was truncated, reloading from beginning", fw.filePath)
 		fw.lastPos = 0
 		fw.file.Seek(0, io.SeekStart)
-		fw.reader = bufio.NewReader(fw.file)
+		fw.reader = bufio.NewReaderSize(fw.file, 64*1024)
 		// Clear existing logs since file was truncated
 		fw.parser.ClearLogs()
-	}
-
-	// File has new content
-	if currentSize > fw.lastPos {
 		fw.mu.Unlock()
 		fw.readNewLines()
-	} else {
+		fw.mu.Lock()
+	} else if currentSize > fw.lastPos {
+		// File has new content
 		fw.mu.Unlock()
+		fw.readNewLines()
+		fw.mu.Lock()
 	}
 
-	fw.mu.Lock()
 	fw.lastSize = currentSize
 	fw.mu.Unlock()
 }
 
 func (fw *FileWatcher) watchLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic in watchLoop: %v", r)
+		}
+	}()
+
 	for {
 		select {
 		case <-fw.stopChan:
@@ -264,6 +283,7 @@ func (fw *FileWatcher) watchLoop() {
 						log.Printf("File %s was removed", fw.filePath)
 						fw.file.Close()
 						fw.file = nil
+						fw.reader = nil
 						fw.lastPos = 0
 						fw.lastSize = 0
 					}
@@ -274,6 +294,7 @@ func (fw *FileWatcher) watchLoop() {
 						log.Printf("File %s was renamed", fw.filePath)
 						fw.file.Close()
 						fw.file = nil
+						fw.reader = nil
 						fw.lastPos = 0
 						fw.lastSize = 0
 					}
@@ -290,6 +311,12 @@ func (fw *FileWatcher) watchLoop() {
 }
 
 func (fw *FileWatcher) pollLoop() {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Panic in pollLoop: %v", r)
+		}
+	}()
+
 	ticker := time.NewTicker(fw.checkInterval)
 	defer ticker.Stop()
 

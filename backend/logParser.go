@@ -1,21 +1,18 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/hpcloud/tail"
 )
 
 type LogEntry struct {
@@ -88,10 +85,10 @@ type Stats struct {
 	TopRequestAddrs        []AddrCount            `json:"topRequestAddrs"`
 	TopRequestHosts        []HostCount            `json:"topRequestHosts"`
 	GeoProcessingRemaining int                    `json:"geoProcessingRemaining"`
-	TotalDataTransmitted   int64                  `json:"totalDataTransmitted"`   // Total bytes transmitted
-	OldestLogTime          string                 `json:"oldestLogTime"`          // Oldest log timestamp
-	NewestLogTime          string                 `json:"newestLogTime"`          // Newest log timestamp
-	AnalysisPeriod         string                 `json:"analysisPeriod"`         // Human readable period
+	TotalDataTransmitted   int64                  `json:"totalDataTransmitted"`
+	OldestLogTime          string                 `json:"oldestLogTime"`
+	NewestLogTime          string                 `json:"newestLogTime"`
+	AnalysisPeriod         string                 `json:"analysisPeriod"`
 }
 
 type IPCount struct {
@@ -150,13 +147,12 @@ type GeoStats struct {
 type LogParser struct {
 	logs                  []LogEntry
 	maxLogs               int
-	tails                 []*tail.Tail
+	fileWatcher           *FileWatcher
 	stats                 Stats
 	lastTimestamp         time.Time
 	requestsInLastSecond  int
-	geoProcessingQueue    []string                // Changed to store unique IPs instead of log entries
-	processedIPs          map[string]bool        // Track which IPs have been processed
-	ipToLogMap            map[string][]*LogEntry // Map IPs to their log entries for updating
+	geoProcessingQueue    []string
+	processedIPs          map[string]bool
 	isProcessingGeo       bool
 	mu                    sync.RWMutex
 	listeners             []chan LogEntry
@@ -164,16 +160,17 @@ type LogParser struct {
 	topRouters            map[string]int
 	topRequestAddrs       map[string]int
 	topRequestHosts       map[string]int
-	totalDataTransmitted  int64                  // Track total bytes
-	oldestLogTime         time.Time              // Track oldest log
-	newestLogTime         time.Time              // Track newest log
+	totalDataTransmitted  int64
+	oldestLogTime         time.Time
+	newestLogTime         time.Time
+	stopChan              chan struct{}
+	geoStopChan           chan struct{}
 }
 
 func NewLogParser() *LogParser {
 	return &LogParser{
 		logs:            make([]LogEntry, 0),
 		maxLogs:         10000,
-		tails:           make([]*tail.Tail, 0),
 		stats:           Stats{
 			StatusCodes:     make(map[int]int),
 			Services:        make(map[string]int),
@@ -184,7 +181,6 @@ func NewLogParser() *LogParser {
 		lastTimestamp:        time.Now(),
 		geoProcessingQueue:   make([]string, 0),
 		processedIPs:         make(map[string]bool),
-		ipToLogMap:           make(map[string][]*LogEntry),
 		listeners:            make([]chan LogEntry, 0),
 		topIPs:               make(map[string]int),
 		topRouters:           make(map[string]int),
@@ -193,47 +189,53 @@ func NewLogParser() *LogParser {
 		totalDataTransmitted: 0,
 		oldestLogTime:        time.Time{},
 		newestLogTime:        time.Time{},
+		stopChan:             make(chan struct{}),
+		geoStopChan:          make(chan struct{}),
 	}
 }
 
-func (lp *LogParser) SetLogFiles(logPaths []string) error {
+func (lp *LogParser) Stop() {
+	close(lp.stopChan)
+	close(lp.geoStopChan)
+	
+	if lp.fileWatcher != nil {
+		lp.fileWatcher.Stop()
+	}
+	
+	// Clean up listeners
 	lp.mu.Lock()
-	// Stop existing tails
-	for _, t := range lp.tails {
-		t.Stop()
+	for _, ch := range lp.listeners {
+		close(ch)
 	}
-	lp.tails = make([]*tail.Tail, 0)
+	lp.listeners = nil
 	lp.mu.Unlock()
+}
 
-	log.Printf("Setting up monitoring for %d log path(s)", len(logPaths))
-
-	for _, logPath := range logPaths {
-		info, err := os.Stat(logPath)
-		if err != nil {
-			log.Printf("Error accessing log path %s: %v", logPath, err)
-			continue
-		}
-
-		if info.IsDir() {
-			files, err := lp.findLogFiles(logPath)
-			if err != nil {
-				log.Printf("Error finding log files in %s: %v", logPath, err)
-				continue
-			}
-			for _, file := range files {
-				if err := lp.setupTailForFile(file); err != nil {
-					log.Printf("Error setting up tail for %s: %v", file, err)
-				}
-			}
-		} else {
-			if err := lp.setupTailForFile(logPath); err != nil {
-				log.Printf("Error setting up tail for %s: %v", logPath, err)
-			}
-		}
+func (lp *LogParser) SetLogFiles(logPaths []string) error {
+	// Stop existing file watcher
+	if lp.fileWatcher != nil {
+		lp.fileWatcher.Stop()
+		lp.fileWatcher = nil
 	}
 
-	// Load historical logs
-	lp.loadHistoricalLogs(logPaths)
+	log.Printf("Setting up monitoring for log file(s): %v", logPaths)
+
+	// Only use the first log file
+	if len(logPaths) > 0 {
+		fw, err := NewFileWatcher(logPaths[0], lp)
+		if err != nil {
+			return fmt.Errorf("failed to create file watcher: %v", err)
+		}
+		lp.fileWatcher = fw
+		
+		// Load only last 1000 lines for initial history
+		lp.loadRecentLogs(logPaths[0], 1000)
+		
+		// Start file watching
+		if err := fw.Start(); err != nil {
+			return fmt.Errorf("failed to start file watcher: %v", err)
+		}
+	}
 
 	// Start geo processing
 	go lp.startGeoProcessing()
@@ -241,102 +243,65 @@ func (lp *LogParser) SetLogFiles(logPaths []string) error {
 	return nil
 }
 
-func (lp *LogParser) findLogFiles(dirPath string) ([]string, error) {
-	var files []string
-	
-	entries, err := ioutil.ReadDir(dirPath)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			name := entry.Name()
-			if strings.HasSuffix(name, ".log") || strings.Contains(name, "traefik") {
-				files = append(files, filepath.Join(dirPath, name))
-			}
-		}
-	}
-
-	return files, nil
-}
-
-func (lp *LogParser) setupTailForFile(filePath string) error {
-	log.Printf("Setting up tail for file: %s", filePath)
-
-	t, err := tail.TailFile(filePath, tail.Config{
-		Follow:    true,
-		ReOpen:    true,
-		MustExist: false,
-		Poll:      true,  // Use polling to detect file changes
-		Location:  &tail.SeekInfo{Offset: 0, Whence: 2}, // Start at end of file
-	})
-	if err != nil {
-		return err
-	}
-
-	lp.mu.Lock()
-	lp.tails = append(lp.tails, t)
-	lp.mu.Unlock()
-
-	go func() {
-		for line := range t.Lines {
-			if line.Err != nil {
-				log.Printf("Error reading line from %s: %v", filePath, line.Err)
-				continue
-			}
-			lp.parseLine(line.Text, true)
-		}
-		log.Printf("Tail stopped for file: %s", filePath)
-	}()
-
-	return nil
-}
-
-func (lp *LogParser) loadHistoricalLogs(paths []string) {
-	log.Println("Loading historical logs...")
-	totalLines := 0
-
-	for _, logPath := range paths {
-		info, err := os.Stat(logPath)
-		if err != nil {
-			log.Printf("Error accessing log path %s: %v", logPath, err)
-			continue
-		}
-
-		if info.IsDir() {
-			files, _ := lp.findLogFiles(logPath)
-			for _, file := range files {
-				lines := lp.loadLogsFromFile(file)
-				totalLines += lines
-			}
-		} else {
-			lines := lp.loadLogsFromFile(logPath)
-			totalLines += lines
-		}
-	}
-
-	log.Printf("Loaded %d historical log entries", totalLines)
-	log.Printf("Found %d unique IPs", len(lp.topIPs))
-}
-
-func (lp *LogParser) loadLogsFromFile(filePath string) int {
+func (lp *LogParser) loadRecentLogs(filePath string, maxLines int) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Printf("Error opening file %s: %v", filePath, err)
-		return 0
+		return
 	}
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	lines := 0
-	
-	for scanner.Scan() {
-		lp.parseLine(scanner.Text(), false)
-		lines++
+	// Get file size
+	stat, err := file.Stat()
+	if err != nil {
+		return
 	}
 
-	return lines
+	// Start from end and read backwards to get last N lines
+	var lines []string
+	var offset int64 = stat.Size()
+	bufferSize := int64(8192)
+	
+	for len(lines) < maxLines && offset > 0 {
+		if offset < bufferSize {
+			bufferSize = offset
+		}
+		offset -= bufferSize
+		
+		buffer := make([]byte, bufferSize)
+		_, err := file.ReadAt(buffer, offset)
+		if err != nil && err != io.EOF {
+			break
+		}
+		
+		// Process buffer in reverse
+		content := string(buffer)
+		newLines := strings.Split(content, "\n")
+		
+		// Prepend to lines slice
+		if len(lines) > 0 && len(newLines) > 0 {
+			// Handle partial line at boundary
+			lines[0] = newLines[len(newLines)-1] + lines[0]
+			if len(newLines) > 1 {
+				lines = append(newLines[:len(newLines)-1], lines...)
+			}
+		} else {
+			lines = append(newLines, lines...)
+		}
+		
+		if len(lines) > maxLines {
+			lines = lines[len(lines)-maxLines:]
+			break
+		}
+	}
+
+	// Parse the lines
+	log.Printf("Loading last %d log entries from %s", len(lines), filePath)
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			lp.parseLine(line, false)
+		}
+	}
 }
 
 func (lp *LogParser) parseLine(line string, emit bool) {
@@ -394,6 +359,17 @@ func (lp *LogParser) parseLine(line string, emit bool) {
 		SpanId:             getStringValue(raw, "SpanId", ""),
 	}
 
+	// Try to get geolocation from cache immediately
+	if logEntry.ClientIP != "unknown" && !lp.isPrivateIP(logEntry.ClientIP) {
+		if geoData := GetGeoLocationFromCache(logEntry.ClientIP); geoData != nil {
+			logEntry.Country = &geoData.Country
+			logEntry.City = &geoData.City
+			logEntry.CountryCode = &geoData.CountryCode
+			logEntry.Lat = &geoData.Lat
+			logEntry.Lon = &geoData.Lon
+		}
+	}
+
 	lp.updateStats(&logEntry)
 
 	lp.mu.Lock()
@@ -403,22 +379,12 @@ func (lp *LogParser) parseLine(line string, emit bool) {
 		lp.logs = lp.logs[:lp.maxLogs]
 	}
 
-	// Get pointer to the actual log entry in the slice for geo processing
-	logPtr := &lp.logs[0]
-
-	// Add to geo processing queue if needed (with deduplication)
-	if logEntry.ClientIP != "unknown" && !lp.isPrivateIP(logEntry.ClientIP) {
-		// Check if this IP has already been processed or is in queue
+	// Add to geo processing queue if needed and not in cache
+	if logEntry.ClientIP != "unknown" && !lp.isPrivateIP(logEntry.ClientIP) && logEntry.Country == nil {
 		if !lp.processedIPs[logEntry.ClientIP] {
 			lp.geoProcessingQueue = append(lp.geoProcessingQueue, logEntry.ClientIP)
 			lp.processedIPs[logEntry.ClientIP] = true
 		}
-		
-		// Add to IP-to-log mapping for updating when geo processing completes
-		if lp.ipToLogMap[logEntry.ClientIP] == nil {
-			lp.ipToLogMap[logEntry.ClientIP] = make([]*LogEntry, 0)
-		}
-		lp.ipToLogMap[logEntry.ClientIP] = append(lp.ipToLogMap[logEntry.ClientIP], logPtr)
 	}
 	lp.mu.Unlock()
 
@@ -460,7 +426,6 @@ func (lp *LogParser) ClearLogs() {
 	// Clear geo processing data
 	lp.geoProcessingQueue = make([]string, 0)
 	lp.processedIPs = make(map[string]bool)
-	lp.ipToLogMap = make(map[string][]*LogEntry)
 	
 	// Notify listeners of the clear
 	for _, listener := range lp.listeners {
@@ -589,11 +554,15 @@ func (lp *LogParser) updateStats(log *LogEntry) {
 
 	// Update average response time
 	totalResponseTime := 0.0
-	for _, l := range lp.logs {
-		totalResponseTime += l.ResponseTime
+	count := 0
+	for i := range lp.logs {
+		if i < 100 { // Only calculate for last 100 logs for performance
+			totalResponseTime += lp.logs[i].ResponseTime
+			count++
+		}
 	}
-	if len(lp.logs) > 0 {
-		lp.stats.AvgResponseTime = totalResponseTime / float64(len(lp.logs))
+	if count > 0 {
+		lp.stats.AvgResponseTime = totalResponseTime / float64(count)
 	}
 
 	// Update requests per second
@@ -810,72 +779,66 @@ func (lp *LogParser) startGeoProcessing() {
 	log.Println("Starting background geo processing...")
 
 	for {
-		lp.mu.Lock()
-		if len(lp.geoProcessingQueue) == 0 {
-			lp.isProcessingGeo = false
+		select {
+		case <-lp.geoStopChan:
+			log.Println("Geo processing stopped")
+			return
+		default:
+			lp.mu.Lock()
+			if len(lp.geoProcessingQueue) == 0 {
+				lp.isProcessingGeo = false
+				lp.mu.Unlock()
+				time.Sleep(5 * time.Second) // Wait before checking again
+				continue
+			}
+
+			// Process up to 40 IPs at a time
+			batchSize := 40
+			if len(lp.geoProcessingQueue) < batchSize {
+				batchSize = len(lp.geoProcessingQueue)
+			}
+			ipBatch := lp.geoProcessingQueue[:batchSize]
+			lp.geoProcessingQueue = lp.geoProcessingQueue[batchSize:]
 			lp.mu.Unlock()
-			break
-		}
 
-		// Process up to 40 IPs at a time
-		batchSize := 40
-		if len(lp.geoProcessingQueue) < batchSize {
-			batchSize = len(lp.geoProcessingQueue)
-		}
-		ipBatch := lp.geoProcessingQueue[:batchSize]
-		lp.geoProcessingQueue = lp.geoProcessingQueue[batchSize:]
-		lp.mu.Unlock()
-
-		// Process each IP in the batch
-		for _, ip := range ipBatch {
-			geoData := GetGeoLocation(ip)
-			if geoData != nil {
-				lp.mu.Lock()
-				
-				// Update country stats
-				key := fmt.Sprintf("%s|%s", geoData.CountryCode, geoData.Country)
-				// Only increment if this is the first time we're processing this IP
-				if _, exists := lp.stats.Countries[key]; !exists {
-					lp.stats.Countries[key] = 0
-				}
-				
-				// Update all log entries for this IP
-				if logPtrs, exists := lp.ipToLogMap[ip]; exists {
-					// Count how many logs we're updating for this IP to add to country stats
-					newLogsCount := 0
-					for _, logPtr := range logPtrs {
-						if logPtr.Country == nil { // Only count if not already geolocated
-							logPtr.Country = &geoData.Country
-							logPtr.City = &geoData.City
-							logPtr.CountryCode = &geoData.CountryCode
-							logPtr.Lat = &geoData.Lat
-							logPtr.Lon = &geoData.Lon
-							newLogsCount++
+			// Process each IP in the batch
+			for _, ip := range ipBatch {
+				geoData := GetGeoLocation(ip)
+				if geoData != nil {
+					lp.mu.Lock()
+					
+					// Update country stats
+					key := fmt.Sprintf("%s|%s", geoData.CountryCode, geoData.Country)
+					
+					// Update all logs with this IP
+					updatedCount := 0
+					for i := range lp.logs {
+						if lp.logs[i].ClientIP == ip && lp.logs[i].Country == nil {
+							lp.logs[i].Country = &geoData.Country
+							lp.logs[i].City = &geoData.City
+							lp.logs[i].CountryCode = &geoData.CountryCode
+							lp.logs[i].Lat = &geoData.Lat
+							lp.logs[i].Lon = &geoData.Lon
+							updatedCount++
 						}
 					}
-					lp.stats.Countries[key] += newLogsCount
 					
-					// Remove from map as it's processed
-					delete(lp.ipToLogMap, ip)
+					if updatedCount > 0 {
+						lp.stats.Countries[key] += updatedCount
+					}
+					
+					lp.mu.Unlock()
 				}
-				
-				lp.mu.Unlock()
+			}
+
+			log.Printf("Processed geo data for %d IPs. %d IPs remaining in queue.", len(ipBatch), len(lp.geoProcessingQueue))
+
+			// Rate limit - only if there are more IPs to process
+			if len(lp.geoProcessingQueue) > 0 {
+				time.Sleep(60 * time.Second)
 			}
 		}
-
-		log.Printf("Processed geo data for %d IPs. %d IPs remaining in queue.", len(ipBatch), len(lp.geoProcessingQueue))
-
-		// Rate limit - only if there are more IPs to process
-		lp.mu.RLock()
-		remainingIPs := len(lp.geoProcessingQueue)
-		lp.mu.RUnlock()
-		
-		if remainingIPs > 0 {
-			time.Sleep(60 * time.Second)
-		}
 	}
-
-	log.Println("Geo processing complete.")
 }
 
 func (lp *LogParser) AddListener(ch chan LogEntry) {
@@ -897,8 +860,11 @@ func (lp *LogParser) RemoveListener(ch chan LogEntry) {
 
 func (lp *LogParser) notifyListeners(log LogEntry) {
 	lp.mu.RLock()
-	defer lp.mu.RUnlock()
-	for _, listener := range lp.listeners {
+	listeners := make([]chan LogEntry, len(lp.listeners))
+	copy(listeners, lp.listeners)
+	lp.mu.RUnlock()
+	
+	for _, listener := range listeners {
 		select {
 		case listener <- log:
 		default:

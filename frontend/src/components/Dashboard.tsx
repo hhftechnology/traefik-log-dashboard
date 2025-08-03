@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "./ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Activity, AlertCircle, Server, Github, RefreshCw } from "lucide-react";
+import { Activity, AlertCircle, Server, Github, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 import { Footer } from "./Footer";
 import { useState, useEffect } from "react";
@@ -92,8 +92,18 @@ export function Dashboard() {
             </Button>
           </a>
           <ThemeToggle />
-          <Badge variant={isConnected ? "success" : "destructive"}>
-            {isConnected ? "Connected" : "Disconnected"}
+          <Badge variant={isConnected ? "success" : "destructive"} className="gap-1">
+            {isConnected ? (
+              <>
+                <Wifi className="h-3 w-3" />
+                Connected
+              </>
+            ) : (
+              <>
+                <WifiOff className="h-3 w-3" />
+                Disconnected
+              </>
+            )}
           </Badge>
         </div>
       </div>
@@ -147,7 +157,14 @@ export function Dashboard() {
             <div className="space-y-3">
               {serviceData.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
-                  No service data available
+                  {!isConnected ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <WifiOff className="h-4 w-4" />
+                      <span>Waiting for connection...</span>
+                    </div>
+                  ) : (
+                    "No service data available"
+                  )}
                 </div>
               ) : (
                 serviceData.map((service: { name: string, value: number }, index) => {
@@ -180,11 +197,27 @@ export function Dashboard() {
           <CardTitle className="flex items-center gap-2">
             <AlertCircle className="h-5 w-5" />
             Recent Logs
+            {isConnected ? (
+              <Badge variant="success" className="gap-1 ml-2">
+                <Wifi className="h-3 w-3" />
+                Real-time
+              </Badge>
+            ) : (
+              <Badge variant="destructive" className="gap-1 ml-2">
+                <WifiOff className="h-3 w-3" />
+                Reconnecting...
+              </Badge>
+            )}
           </CardTitle>
-          <CardDescription>Real-time log entries</CardDescription>
+          <CardDescription>
+            {isConnected 
+              ? "Live log entries from Traefik" 
+              : "Connection lost, attempting to reconnect..."
+            }
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <LogTable logs={logs} />
+          <LogTable logs={logs} isConnected={isConnected} />
         </CardContent>
       </Card>
       <Footer />
