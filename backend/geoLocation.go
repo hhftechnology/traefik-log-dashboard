@@ -33,6 +33,7 @@ var (
 const (
 	RATE_LIMIT_WINDOW      = time.Minute
 	MAX_REQUESTS_PER_MINUTE = 45
+	MAX_RETRY_QUEUE_SIZE    = 1000 // Limit retry queue size
 )
 
 type GeoData struct {
@@ -45,7 +46,7 @@ type GeoData struct {
 	Timezone    string  `json:"timezone,omitempty"`
 	ISP         string  `json:"isp,omitempty"`
 	Org         string  `json:"org,omitempty"`
-	Source      string  `json:"source,omitempty"` // "maxmind", "online", or "cached"
+	Source      string  `json:"source,omitempty"`
 }
 
 type IPAPIResponse struct {
@@ -96,15 +97,24 @@ type MaxMindConfig struct {
 	DatabaseError     string `json:"databaseError,omitempty"`
 }
 
+var (
+	retryProcessorTicker *time.Ticker
+	retryProcessorStop   chan struct{}
+)
+
 func init() {
 	geoCache = cache.New(7*24*time.Hour, 24*time.Hour) // 7 days cache, 24 hour cleanup
 	lastRequestTime = time.Now()
+	retryProcessorStop = make(chan struct{})
 	
 	// Initialize country name map
 	initCountryNames()
 	
 	// Initialize MaxMind configuration from environment variables
 	initMaxMind()
+	
+	// Start retry processing
+	startRetryProcessor()
 }
 
 func initMaxMind() {
@@ -240,6 +250,16 @@ func getGeoFromMaxMind(ip string) *GeoData {
 		Timezone:    timezone,
 		Source:      "maxmind",
 	}
+}
+
+// GetGeoLocationFromCache returns geo data from cache only (no API calls)
+func GetGeoLocationFromCache(ip string) *GeoData {
+	if cached, found := geoCache.Get(ip); found {
+		if geoData, ok := cached.(*GeoData); ok {
+			return geoData
+		}
+	}
+	return nil
 }
 
 func GetGeoLocation(ip string) *GeoData {
@@ -478,6 +498,20 @@ func getCountryName(code string) string {
 func addToRetryQueue(ip string) {
 	retryQueueMutex.Lock()
 	defer retryQueueMutex.Unlock()
+	
+	// Limit retry queue size to prevent unbounded growth
+	if len(retryQueue) >= MAX_RETRY_QUEUE_SIZE {
+		// Remove oldest entries
+		retryQueue = retryQueue[100:]
+	}
+	
+	// Check if IP already in queue
+	for _, existingIP := range retryQueue {
+		if existingIP == ip {
+			return
+		}
+	}
+	
 	retryQueue = append(retryQueue, ip)
 }
 
@@ -493,7 +527,8 @@ func ProcessRetryQueue() {
 		batchSize = len(retryQueue)
 	}
 	
-	batch := retryQueue[:batchSize]
+	batch := make([]string, batchSize)
+	copy(batch, retryQueue[:batchSize])
 	retryQueue = retryQueue[batchSize:]
 	retryQueueMutex.Unlock()
 	
@@ -541,215 +576,223 @@ func CloseMaxMindDatabase() {
 	}
 }
 
-func init() {
+func startRetryProcessor() {
 	// Start retry processing every 2 minutes
+	retryProcessorTicker = time.NewTicker(2 * time.Minute)
+	
 	go func() {
-		ticker := time.NewTicker(2 * time.Minute)
-		defer ticker.Stop()
-		
-		for range ticker.C {
-			ProcessRetryQueue()
+		for {
+			select {
+			case <-retryProcessorTicker.C:
+				ProcessRetryQueue()
+			case <-retryProcessorStop:
+				retryProcessorTicker.Stop()
+				return
+			}
 		}
 	}()
 }
 
+func StopRetryProcessor() {
+	close(retryProcessorStop)
+}
 
 func initCountryNames() {
-countryNameMap = map[string]string{
-	"AF": "Afghanistan",
-	"AL": "Albania",
-	"DZ": "Algeria",
-	"AD": "Andorra",
-	"AO": "Angola",
-	"AG": "Antigua and Barbuda",
-	"AR": "Argentina",
-	"AM": "Armenia",
-	"AU": "Australia",
-	"AT": "Austria",
-	"AZ": "Azerbaijan",
-	"BS": "Bahamas",
-	"BH": "Bahrain",
-	"BD": "Bangladesh",
-	"BB": "Barbados",
-	"BY": "Belarus",
-	"BE": "Belgium",
-	"BZ": "Belize",
-	"BJ": "Benin",
-	"BT": "Bhutan",
-	"BO": "Bolivia",
-	"BA": "Bosnia and Herzegovina",
-	"BW": "Botswana",
-	"BR": "Brazil",
-	"BN": "Brunei",
-	"BG": "Bulgaria",
-	"BF": "Burkina Faso",
-	"BI": "Burundi",
-	"CV": "Cabo Verde",
-	"KH": "Cambodia",
-	"CM": "Cameroon",
-	"CA": "Canada",
-	"CF": "Central African Republic",
-	"TD": "Chad",
-	"CL": "Chile",
-	"CN": "China",
-	"CO": "Colombia",
-	"KM": "Comoros",
-	"CG": "Congo",
-	"CD": "Democratic Republic of the Congo",
-	"CR": "Costa Rica",
-	"CI": "Côte d'Ivoire",
-	"HR": "Croatia",
-	"CU": "Cuba",
-	"CY": "Cyprus",
-	"CZ": "Czech Republic",
-	"DK": "Denmark",
-	"DJ": "Djibouti",
-	"DM": "Dominica",
-	"DO": "Dominican Republic",
-	"EC": "Ecuador",
-	"EG": "Egypt",
-	"SV": "El Salvador",
-	"GQ": "Equatorial Guinea",
-	"ER": "Eritrea",
-	"EE": "Estonia",
-	"SZ": "Eswatini",
-	"ET": "Ethiopia",
-	"FJ": "Fiji",
-	"FI": "Finland",
-	"FR": "France",
-	"GA": "Gabon",
-	"GM": "Gambia",
-	"GE": "Georgia",
-	"DE": "Germany",
-	"GH": "Ghana",
-	"GR": "Greece",
-	"GD": "Grenada",
-	"GT": "Guatemala",
-	"GN": "Guinea",
-	"GW": "Guinea-Bissau",
-	"GY": "Guyana",
-	"HT": "Haiti",
-	"VA": "Vatican City",
-	"HN": "Honduras",
-	"HU": "Hungary",
-	"IS": "Iceland",
-	"IN": "India",
-	"ID": "Indonesia",
-	"IR": "Iran",
-	"IQ": "Iraq",
-	"IE": "Ireland",
-	"IL": "Israel",
-	"IT": "Italy",
-	"JM": "Jamaica",
-	"JP": "Japan",
-	"JO": "Jordan",
-	"KZ": "Kazakhstan",
-	"KE": "Kenya",
-	"KI": "Kiribati",
-	"KP": "North Korea",
-	"KR": "South Korea",
-	"KW": "Kuwait",
-	"KG": "Kyrgyzstan",
-	"LA": "Laos",
-	"LV": "Latvia",
-	"LB": "Lebanon",
-	"LS": "Lesotho",
-	"LR": "Liberia",
-	"LY": "Libya",
-	"LI": "Liechtenstein",
-	"LT": "Lithuania",
-	"LU": "Luxembourg",
-	"MG": "Madagascar",
-	"MW": "Malawi",
-	"MY": "Malaysia",
-	"MV": "Maldives",
-	"ML": "Mali",
-	"MT": "Malta",
-	"MH": "Marshall Islands",
-	"MR": "Mauritania",
-	"MU": "Mauritius",
-	"MX": "Mexico",
-	"FM": "Micronesia",
-	"MD": "Moldova",
-	"MC": "Monaco",
-	"MN": "Mongolia",
-	"ME": "Montenegro",
-	"MA": "Morocco",
-	"MZ": "Mozambique",
-	"MM": "Myanmar",
-	"NA": "Namibia",
-	"NR": "Nauru",
-	"NP": "Nepal",
-	"NL": "Netherlands",
-	"NZ": "New Zealand",
-	"NI": "Nicaragua",
-	"NE": "Niger",
-	"NG": "Nigeria",
-	"MK": "North Macedonia",
-	"NO": "Norway",
-	"OM": "Oman",
-	"PK": "Pakistan",
-	"PW": "Palau",
-	"PS": "Palestine",
-	"PA": "Panama",
-	"PG": "Papua New Guinea",
-	"PY": "Paraguay",
-	"PE": "Peru",
-	"PH": "Philippines",
-	"PL": "Poland",
-	"PT": "Portugal",
-	"QA": "Qatar",
-	"RO": "Romania",
-	"RU": "Russia",
-	"RW": "Rwanda",
-	"KN": "Saint Kitts and Nevis",
-	"LC": "Saint Lucia",
-	"VC": "Saint Vincent and the Grenadines",
-	"WS": "Samoa",
-	"SM": "San Marino",
-	"ST": "Sao Tome and Principe",
-	"SA": "Saudi Arabia",
-	"SN": "Senegal",
-	"RS": "Serbia",
-	"SC": "Seychelles",
-	"SL": "Sierra Leone",
-	"SG": "Singapore",
-	"SK": "Slovakia",
-	"SI": "Slovenia",
-	"SB": "Solomon Islands",
-	"SO": "Somalia",
-	"ZA": "South Africa",
-	"SS": "South Sudan",
-	"ES": "Spain",
-	"LK": "Sri Lanka",
-	"SD": "Sudan",
-	"SR": "Suriname",
-	"SE": "Sweden",
-	"CH": "Switzerland",
-	"SY": "Syria",
-	"TJ": "Tajikistan",
-	"TZ": "Tanzania",
-	"TH": "Thailand",
-	"TL": "Timor-Leste",
-	"TG": "Togo",
-	"TO": "Tonga",
-	"TT": "Trinidad and Tobago",
-	"TN": "Tunisia",
-	"TR": "Turkey",
-	"TM": "Turkmenistan",
-	"TV": "Tuvalu",
-	"UG": "Uganda",
-	"UA": "Ukraine",
-	"AE": "United Arab Emirates",
-	"GB": "United Kingdom",
-	"US": "United States",
-	"UY": "Uruguay",
-	"UZ": "Uzbekistan",
-	"VU": "Vanuatu",
-	"VE": "Venezuela",
-	"VN": "Vietnam",
-	"YE": "Yemen",
-	"ZM": "Zambia",
-	"ZW": "Zimbabwe",
-}
+	countryNameMap = map[string]string{
+		"AF": "Afghanistan",
+		"AL": "Albania",
+		"DZ": "Algeria",
+		"AD": "Andorra",
+		"AO": "Angola",
+		"AG": "Antigua and Barbuda",
+		"AR": "Argentina",
+		"AM": "Armenia",
+		"AU": "Australia",
+		"AT": "Austria",
+		"AZ": "Azerbaijan",
+		"BS": "Bahamas",
+		"BH": "Bahrain",
+		"BD": "Bangladesh",
+		"BB": "Barbados",
+		"BY": "Belarus",
+		"BE": "Belgium",
+		"BZ": "Belize",
+		"BJ": "Benin",
+		"BT": "Bhutan",
+		"BO": "Bolivia",
+		"BA": "Bosnia and Herzegovina",
+		"BW": "Botswana",
+		"BR": "Brazil",
+		"BN": "Brunei",
+		"BG": "Bulgaria",
+		"BF": "Burkina Faso",
+		"BI": "Burundi",
+		"CV": "Cabo Verde",
+		"KH": "Cambodia",
+		"CM": "Cameroon",
+		"CA": "Canada",
+		"CF": "Central African Republic",
+		"TD": "Chad",
+		"CL": "Chile",
+		"CN": "China",
+		"CO": "Colombia",
+		"KM": "Comoros",
+		"CG": "Congo",
+		"CD": "Democratic Republic of the Congo",
+		"CR": "Costa Rica",
+		"CI": "Côte d'Ivoire",
+		"HR": "Croatia",
+		"CU": "Cuba",
+		"CY": "Cyprus",
+		"CZ": "Czech Republic",
+		"DK": "Denmark",
+		"DJ": "Djibouti",
+		"DM": "Dominica",
+		"DO": "Dominican Republic",
+		"EC": "Ecuador",
+		"EG": "Egypt",
+		"SV": "El Salvador",
+		"GQ": "Equatorial Guinea",
+		"ER": "Eritrea",
+		"EE": "Estonia",
+		"SZ": "Eswatini",
+		"ET": "Ethiopia",
+		"FJ": "Fiji",
+		"FI": "Finland",
+		"FR": "France",
+		"GA": "Gabon",
+		"GM": "Gambia",
+		"GE": "Georgia",
+		"DE": "Germany",
+		"GH": "Ghana",
+		"GR": "Greece",
+		"GD": "Grenada",
+		"GT": "Guatemala",
+		"GN": "Guinea",
+		"GW": "Guinea-Bissau",
+		"GY": "Guyana",
+		"HT": "Haiti",
+		"VA": "Vatican City",
+		"HN": "Honduras",
+		"HU": "Hungary",
+		"IS": "Iceland",
+		"IN": "India",
+		"ID": "Indonesia",
+		"IR": "Iran",
+		"IQ": "Iraq",
+		"IE": "Ireland",
+		"IL": "Israel",
+		"IT": "Italy",
+		"JM": "Jamaica",
+		"JP": "Japan",
+		"JO": "Jordan",
+		"KZ": "Kazakhstan",
+		"KE": "Kenya",
+		"KI": "Kiribati",
+		"KP": "North Korea",
+		"KR": "South Korea",
+		"KW": "Kuwait",
+		"KG": "Kyrgyzstan",
+		"LA": "Laos",
+		"LV": "Latvia",
+		"LB": "Lebanon",
+		"LS": "Lesotho",
+		"LR": "Liberia",
+		"LY": "Libya",
+		"LI": "Liechtenstein",
+		"LT": "Lithuania",
+		"LU": "Luxembourg",
+		"MG": "Madagascar",
+		"MW": "Malawi",
+		"MY": "Malaysia",
+		"MV": "Maldives",
+		"ML": "Mali",
+		"MT": "Malta",
+		"MH": "Marshall Islands",
+		"MR": "Mauritania",
+		"MU": "Mauritius",
+		"MX": "Mexico",
+		"FM": "Micronesia",
+		"MD": "Moldova",
+		"MC": "Monaco",
+		"MN": "Mongolia",
+		"ME": "Montenegro",
+		"MA": "Morocco",
+		"MZ": "Mozambique",
+		"MM": "Myanmar",
+		"NA": "Namibia",
+		"NR": "Nauru",
+		"NP": "Nepal",
+		"NL": "Netherlands",
+		"NZ": "New Zealand",
+		"NI": "Nicaragua",
+		"NE": "Niger",
+		"NG": "Nigeria",
+		"MK": "North Macedonia",
+		"NO": "Norway",
+		"OM": "Oman",
+		"PK": "Pakistan",
+		"PW": "Palau",
+		"PS": "Palestine",
+		"PA": "Panama",
+		"PG": "Papua New Guinea",
+		"PY": "Paraguay",
+		"PE": "Peru",
+		"PH": "Philippines",
+		"PL": "Poland",
+		"PT": "Portugal",
+		"QA": "Qatar",
+		"RO": "Romania",
+		"RU": "Russia",
+		"RW": "Rwanda",
+		"KN": "Saint Kitts and Nevis",
+		"LC": "Saint Lucia",
+		"VC": "Saint Vincent and the Grenadines",
+		"WS": "Samoa",
+		"SM": "San Marino",
+		"ST": "Sao Tome and Principe",
+		"SA": "Saudi Arabia",
+		"SN": "Senegal",
+		"RS": "Serbia",
+		"SC": "Seychelles",
+		"SL": "Sierra Leone",
+		"SG": "Singapore",
+		"SK": "Slovakia",
+		"SI": "Slovenia",
+		"SB": "Solomon Islands",
+		"SO": "Somalia",
+		"ZA": "South Africa",
+		"SS": "South Sudan",
+		"ES": "Spain",
+		"LK": "Sri Lanka",
+		"SD": "Sudan",
+		"SR": "Suriname",
+		"SE": "Sweden",
+		"CH": "Switzerland",
+		"SY": "Syria",
+		"TJ": "Tajikistan",
+		"TZ": "Tanzania",
+		"TH": "Thailand",
+		"TL": "Timor-Leste",
+		"TG": "Togo",
+		"TO": "Tonga",
+		"TT": "Trinidad and Tobago",
+		"TN": "Tunisia",
+		"TR": "Turkey",
+		"TM": "Turkmenistan",
+		"TV": "Tuvalu",
+		"UG": "Uganda",
+		"UA": "Ukraine",
+		"AE": "United Arab Emirates",
+		"GB": "United Kingdom",
+		"US": "United States",
+		"UY": "Uruguay",
+		"UZ": "Uzbekistan",
+		"VU": "Vanuatu",
+		"VE": "Venezuela",
+		"VN": "Vietnam",
+		"YE": "Yemen",
+		"ZM": "Zambia",
+		"ZW": "Zimbabwe",
+	}
 }

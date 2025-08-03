@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,11 +17,16 @@ type WebSocketMessage struct {
 }
 
 type WebSocketClient struct {
-	conn      *websocket.Conn
-	send      chan []byte
-	logParser *LogParser
-	logChan   chan LogEntry
-	clientID  string
+	conn       *websocket.Conn
+	send       chan []byte
+	logParser  *LogParser
+	logChan    chan LogEntry
+	clientID   string
+	closeChan  chan struct{}
+	closeOnce  sync.Once
+	mu         sync.Mutex
+	lastPing   time.Time
+	isClosing  bool
 }
 
 func NewWebSocketClient(conn *websocket.Conn, logParser *LogParser) *WebSocketClient {
@@ -33,39 +39,89 @@ func NewWebSocketClient(conn *websocket.Conn, logParser *LogParser) *WebSocketCl
 		logParser: logParser,
 		logChan:   make(chan LogEntry, 100),
 		clientID:  clientID,
+		closeChan: make(chan struct{}),
+		lastPing:  time.Now(),
 	}
 }
 
-func (c *WebSocketClient) ReadPump() {
-	defer func() {
-		log.Printf("[WebSocket] Client %s disconnecting", c.clientID)
-		c.logParser.RemoveListener(c.logChan)
-		c.conn.Close()
+func (c *WebSocketClient) Start() {
+	// Start goroutines with proper cleanup
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[WebSocket] WritePump panic recovered: %v", r)
+			}
+			removeWSClient(c)
+			c.Close()
+		}()
+		c.WritePump()
 	}()
+	
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[WebSocket] ReadPump panic recovered: %v", r)
+			}
+			removeWSClient(c)
+			c.Close()
+		}()
+		c.ReadPump()
+	}()
+}
+
+func (c *WebSocketClient) Close() {
+	c.closeOnce.Do(func() {
+		log.Printf("[WebSocket] Closing client %s", c.clientID)
+		
+		c.mu.Lock()
+		c.isClosing = true
+		c.mu.Unlock()
+		
+		close(c.closeChan)
+		c.logParser.RemoveListener(c.logChan)
+		
+		// Close send channel
+		close(c.send)
+		
+		// Close WebSocket connection
+		c.conn.Close()
+	})
+}
+
+func (c *WebSocketClient) ReadPump() {
+	defer c.Close()
 
 	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
+		c.mu.Lock()
+		c.lastPing = time.Now()
+		c.mu.Unlock()
 		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
 	})
 
 	for {
-		_, message, err := c.conn.ReadMessage()
-		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("[WebSocket] Client %s error: %v", c.clientID, err)
+		select {
+		case <-c.closeChan:
+			return
+		default:
+			_, message, err := c.conn.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("[WebSocket] Client %s error: %v", c.clientID, err)
+				}
+				return
 			}
-			break
-		}
 
-		var msg WebSocketMessage
-		if err := json.Unmarshal(message, &msg); err != nil {
-			log.Printf("[WebSocket] Client %s message parse error: %v", c.clientID, err)
-			continue
-		}
+			var msg WebSocketMessage
+			if err := json.Unmarshal(message, &msg); err != nil {
+				log.Printf("[WebSocket] Client %s message parse error: %v", c.clientID, err)
+				continue
+			}
 
-		log.Printf("[WebSocket] Client %s sent message type: %s", c.clientID, msg.Type)
-		c.handleMessage(msg)
+			log.Printf("[WebSocket] Client %s sent message type: %s", c.clientID, msg.Type)
+			c.handleMessage(msg)
+		}
 	}
 }
 
@@ -78,8 +134,7 @@ func (c *WebSocketClient) WritePump() {
 		ticker.Stop()
 		statsInterval.Stop()
 		geoStatsInterval.Stop()
-		c.conn.Close()
-		log.Printf("[WebSocket] Client %s write pump stopped", c.clientID)
+		c.Close()
 	}()
 
 	// Send initial data
@@ -93,13 +148,16 @@ func (c *WebSocketClient) WritePump() {
 	messageCount := 0
 	for {
 		select {
+		case <-c.closeChan:
+			return
+			
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
+			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteMessage(websocket.TextMessage, message); err != nil {
 				log.Printf("[WebSocket] Client %s write error: %v", c.clientID, err)
 				return
@@ -110,27 +168,58 @@ func (c *WebSocketClient) WritePump() {
 				log.Printf("[WebSocket] Client %s sent %d messages", c.clientID, messageCount)
 			}
 
-		case logEntry := <-c.logChan:
-			if logEntry.ID == "CLEAR" {
-				log.Printf("[WebSocket] Sending clear signal to client %s", c.clientID)
-			} else {
-				log.Printf("[WebSocket] Sending new log to client %s: %s %s %s", 
-					c.clientID, logEntry.Method, logEntry.Path, logEntry.ClientIP)
+			// Drain send channel to prevent blocking (batch send)
+			n := len(c.send)
+			for i := 0; i < n; i++ {
+				select {
+				case msg := <-c.send:
+					if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+						return
+					}
+					messageCount++
+				default:
+					break
+				}
 			}
-			c.sendNewLogWithStats(logEntry)
+
+		case logEntry := <-c.logChan:
+			select {
+			case <-c.closeChan:
+				return
+			default:
+				if logEntry.ID == "CLEAR" {
+					log.Printf("[WebSocket] Sending clear signal to client %s", c.clientID)
+				}
+				c.sendNewLogWithStats(logEntry)
+			}
 
 		case <-statsInterval.C:
-			c.sendStats()
+			select {
+			case <-c.closeChan:
+				return
+			default:
+				c.sendStats()
+			}
 
 		case <-geoStatsInterval.C:
-			c.sendGeoStats()
-			c.sendGeoProcessingStatus()
+			select {
+			case <-c.closeChan:
+				return
+			default:
+				c.sendGeoStats()
+				c.sendGeoProcessingStatus()
+			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				log.Printf("[WebSocket] Client %s ping error: %v", c.clientID, err)
+			select {
+			case <-c.closeChan:
 				return
+			default:
+				c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					log.Printf("[WebSocket] Client %s ping error: %v", c.clientID, err)
+					return
+				}
 			}
 		}
 	}
@@ -191,6 +280,13 @@ func (c *WebSocketClient) handleMessage(msg WebSocketMessage) {
 }
 
 func (c *WebSocketClient) sendMessage(msg WebSocketMessage) {
+	c.mu.Lock()
+	if c.isClosing {
+		c.mu.Unlock()
+		return
+	}
+	c.mu.Unlock()
+
 	data, err := json.Marshal(msg)
 	if err != nil {
 		log.Printf("[WebSocket] Client %s marshal error: %v", c.clientID, err)
@@ -200,8 +296,10 @@ func (c *WebSocketClient) sendMessage(msg WebSocketMessage) {
 	select {
 	case c.send <- data:
 		// Message sent successfully
-	default:
-		log.Printf("[WebSocket] Client %s send channel full, dropping message type: %s", c.clientID, msg.Type)
+	case <-time.After(time.Second):
+		log.Printf("[WebSocket] Client %s send timeout, dropping message type: %s", c.clientID, msg.Type)
+	case <-c.closeChan:
+		// Client is closing
 	}
 }
 
@@ -283,15 +381,32 @@ func (c *WebSocketClient) ForceGeoRefresh() {
 
 // Health check method to verify client is still active
 func (c *WebSocketClient) IsHealthy() bool {
-	return c.conn != nil
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
+	if c.isClosing || c.conn == nil {
+		return false
+	}
+	
+	// Check if we've received a pong recently
+	if time.Since(c.lastPing) > 90*time.Second {
+		return false
+	}
+	
+	return true
 }
 
 // Get client info for debugging
 func (c *WebSocketClient) GetInfo() map[string]interface{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	
 	return map[string]interface{}{
 		"clientID":    c.clientID,
 		"remoteAddr":  c.conn.RemoteAddr().String(),
 		"sendChanLen": len(c.send),
 		"logChanLen":  len(c.logChan),
+		"lastPing":    c.lastPing.Format(time.RFC3339),
+		"isClosing":   c.isClosing,
 	}
 }

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -24,8 +27,10 @@ var (
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
-	wsClients    = make(map[*WebSocketClient]bool) // Track WebSocket clients
-	wsClientsMux = sync.RWMutex{}                  // Protect client map
+	wsClients    = make(map[*WebSocketClient]bool)
+	wsClientsMux = sync.RWMutex{}
+	healthTicker *time.Ticker
+	healthStop   chan struct{}
 )
 
 func main() {
@@ -35,8 +40,21 @@ func main() {
 	// Initialize log parser
 	logParser = NewLogParser()
 
-	// Setup graceful shutdown for MaxMind database
-	defer CloseMaxMindDatabase()
+	// Setup graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle shutdown signals
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		log.Println("Shutdown signal received, cleaning up...")
+		cancel()
+		cleanup()
+		os.Exit(0)
+	}()
 
 	// Start WebSocket health monitoring
 	startWebSocketHealthMonitor()
@@ -104,9 +122,58 @@ func main() {
 	log.Printf("MaxMind configuration: %+v", GetMaxMindConfig())
 	log.Printf("WebSocket clients tracking enabled")
 	
-	if err := r.Run(":" + port); err != nil {
-		log.Fatal("Failed to start server:", err)
+	// Start server with graceful shutdown
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
 	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal("Failed to start server:", err)
+		}
+	}()
+
+	// Wait for shutdown signal
+	<-ctx.Done()
+	
+	// Shutdown server with timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
+	}
+}
+
+func cleanup() {
+	log.Println("Starting cleanup...")
+	
+	// Stop health monitor
+	if healthStop != nil {
+		close(healthStop)
+	}
+	
+	// Stop log parser
+	if logParser != nil {
+		logParser.Stop()
+	}
+	
+	// Close all WebSocket connections
+	wsClientsMux.Lock()
+	for client := range wsClients {
+		client.Close()
+	}
+	wsClients = make(map[*WebSocketClient]bool)
+	wsClientsMux.Unlock()
+	
+	// Stop geo retry processor
+	StopRetryProcessor()
+	
+	// Close MaxMind database
+	CloseMaxMindDatabase()
+	
+	log.Println("Cleanup completed")
 }
 
 // WebSocket Client Management Functions
@@ -163,36 +230,43 @@ func broadcastGeoUpdate() {
 
 // Start periodic WebSocket health monitoring
 func startWebSocketHealthMonitor() {
+	healthStop = make(chan struct{})
+	healthTicker = time.NewTicker(30 * time.Second)
+	
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
-		defer ticker.Stop()
-		
-		for range ticker.C {
-			wsClientsMux.RLock()
-			unhealthyClients := make([]*WebSocketClient, 0)
-			totalClients := len(wsClients)
-			
-			for client := range wsClients {
-				if !client.IsHealthy() {
-					unhealthyClients = append(unhealthyClients, client)
-				}
-			}
-			wsClientsMux.RUnlock()
-			
-			// Remove unhealthy clients
-			if len(unhealthyClients) > 0 {
-				wsClientsMux.Lock()
-				for _, client := range unhealthyClients {
-					delete(wsClients, client)
-				}
-				wsClientsMux.Unlock()
+		for {
+			select {
+			case <-healthTicker.C:
+				wsClientsMux.RLock()
+				unhealthyClients := make([]*WebSocketClient, 0)
+				totalClients := len(wsClients)
 				
-				log.Printf("[WebSocket] Health check: removed %d unhealthy clients, %d remaining", 
-					len(unhealthyClients), totalClients-len(unhealthyClients))
-			}
-			
-			if totalClients > 0 && len(unhealthyClients) == 0 {
-				log.Printf("[WebSocket] Health check: %d clients healthy", totalClients)
+				for client := range wsClients {
+					if !client.IsHealthy() {
+						unhealthyClients = append(unhealthyClients, client)
+					}
+				}
+				wsClientsMux.RUnlock()
+				
+				// Remove unhealthy clients
+				if len(unhealthyClients) > 0 {
+					wsClientsMux.Lock()
+					for _, client := range unhealthyClients {
+						delete(wsClients, client)
+						client.Close()
+					}
+					wsClientsMux.Unlock()
+					
+					log.Printf("[WebSocket] Health check: removed %d unhealthy clients, %d remaining", 
+						len(unhealthyClients), totalClients-len(unhealthyClients))
+				}
+				
+				if totalClients > 0 && len(unhealthyClients) == 0 {
+					log.Printf("[WebSocket] Health check: %d clients healthy", totalClients)
+				}
+			case <-healthStop:
+				healthTicker.Stop()
+				return
 			}
 		}
 	}()
@@ -489,26 +563,8 @@ func handleWebSocket(c *gin.Context) {
 	client := NewWebSocketClient(conn, logParser)
 	addWSClient(client)
 	
-	// Start client goroutines with proper cleanup
-	go func() {
-		defer func() {
-			removeWSClient(client)
-			if r := recover(); r != nil {
-				log.Printf("[WebSocket] WritePump panic recovered: %v", r)
-			}
-		}()
-		client.WritePump()
-	}()
-	
-	go func() {
-		defer func() {
-			removeWSClient(client)
-			if r := recover(); r != nil {
-				log.Printf("[WebSocket] ReadPump panic recovered: %v", r)
-			}
-		}()
-		client.ReadPump()
-	}()
+	// Start client goroutines
+	client.Start()
 	
 	log.Printf("[WebSocket] Client setup complete for %s", c.ClientIP())
 }

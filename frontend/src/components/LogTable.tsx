@@ -182,8 +182,6 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
 
   // Apply filters to real-time logs with useMemo for performance
   const filteredLogs = useMemo(() => {
-    console.log('Filtering logs:', { total: realtimeLogs.length, hideUnknown, hidePrivateIPs });
-    
     const filtered = realtimeLogs.filter(log => {
       if (hideUnknown && (log.serviceName === "unknown" || log.routerName === "unknown")) {
         return false;
@@ -194,7 +192,6 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
       return true;
     });
     
-    console.log('Filtered logs:', filtered.length);
     return filtered;
   }, [realtimeLogs, hideUnknown, hidePrivateIPs]);
 
@@ -225,20 +222,17 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
 
   // Calculate pagination
   const totalLogs = sortedLogs.length;
-  const totalPages = Math.ceil(totalLogs / pageSize);
+  const totalPages = Math.max(1, Math.ceil(totalLogs / pageSize));
   
-  // Auto-scroll to first page when new logs arrive (if enabled and on first page)
+  // Auto-scroll to first page when new logs arrive (if enabled)
   useEffect(() => {
-    if (autoScroll && currentPage === 1) {
-      // Already on first page, no need to change
-    } else if (autoScroll && realtimeLogs.length > 0) {
-      // New logs arrived, go to first page to see them
+    if (autoScroll && realtimeLogs.length > 0) {
       setCurrentPage(1);
     }
   }, [realtimeLogs.length, autoScroll]);
 
   // Calculate display logs for current page
-  const startIndex = (currentPage - 1) * pageSize;
+  const startIndex = Math.max(0, (currentPage - 1) * pageSize);
   const endIndex = Math.min(startIndex + pageSize, totalLogs);
   const displayLogs = sortedLogs.slice(startIndex, endIndex);
 
@@ -247,10 +241,12 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
     setCurrentPage(1);
   }, [hideUnknown, hidePrivateIPs, pageSize]);
 
-  // Reset to valid page if current page is beyond total pages
+  // Ensure current page is valid
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
-      setCurrentPage(Math.max(1, totalPages));
+      setCurrentPage(totalPages);
+    } else if (currentPage < 1 && totalPages > 0) {
+      setCurrentPage(1);
     }
   }, [currentPage, totalPages]);
 
@@ -464,7 +460,7 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
               </Badge>
             )}
             <span className="text-xs text-muted-foreground">
-              {realtimeLogs.length} total logs
+              {totalLogs} filtered logs (Total: {realtimeLogs.length})
             </span>
           </div>
         </div>
@@ -524,7 +520,7 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
           </div>
           
           <div className="text-sm text-muted-foreground">
-            Showing {Math.min(startIndex + 1, totalLogs)} to {endIndex} of {totalLogs} entries
+            Showing {totalLogs > 0 ? startIndex + 1 : 0} to {endIndex} of {totalLogs} entries
           </div>
         </div>
       </div>
@@ -581,7 +577,7 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
-            Total {totalLogs} entries • Page {currentPage} of {totalPages}
+            Total {totalLogs} filtered entries • Page {currentPage} of {totalPages}
           </div>
           
           <div className="flex items-center gap-2">

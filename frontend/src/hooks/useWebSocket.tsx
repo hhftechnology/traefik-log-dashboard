@@ -100,10 +100,13 @@ export interface Stats {
 }
 
 interface WebSocketMessage {
-  type: 'newLog' | 'logs' | 'stats' | 'geoStats' | 'clear' | 'geoDataUpdated';
+  type: 'newLog' | 'logs' | 'stats' | 'geoStats' | 'clear' | 'geoDataUpdated' | 'geoProcessingStatus';
   data: any;
   stats?: Stats;
 }
+
+// Maximum logs to keep in memory (prevent unbounded growth)
+const MAX_LOGS_IN_MEMORY = 10000;
 
 export function useWebSocket() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -116,25 +119,34 @@ export function useWebSocket() {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 10;
   const baseReconnectDelay = 1000; // Start with 1 second
+  const mounted = useRef(true);
 
   // Use callbacks to avoid stale closures
   const updateLogs = useCallback((newLog: LogEntry) => {
+    if (!mounted.current) return;
+    
     setLogs(prevLogs => {
-      const updated = [newLog, ...prevLogs].slice(0, 1000); // Keep max 1000 logs
-      console.log('Updated logs count:', updated.length);
+      // Add new log at the beginning and limit total size
+      const updated = [newLog, ...prevLogs].slice(0, MAX_LOGS_IN_MEMORY);
       return updated;
     });
   }, []);
 
+  const setLogsDirectly = useCallback((newLogs: LogEntry[]) => {
+    if (!mounted.current) return;
+    
+    setLogs(newLogs.slice(0, MAX_LOGS_IN_MEMORY));
+  }, []);
+
   const updateStats = useCallback((newStats: Stats) => {
+    if (!mounted.current) return;
+    
     setStats(newStats);
-    console.log('Updated stats:', { 
-      totalRequests: newStats.totalRequests, 
-      requestsPerSecond: newStats.requestsPerSecond 
-    });
   }, []);
 
   const clearData = useCallback(() => {
+    if (!mounted.current) return;
+    
     setLogs([]);
     setStats(null);
     setGeoDataVersion(0);
@@ -142,6 +154,8 @@ export function useWebSocket() {
   }, []);
 
   const connect = useCallback(() => {
+    if (!mounted.current) return;
+    
     if (ws.current?.readyState === WebSocket.OPEN) {
       return; // Already connected
     }
@@ -154,6 +168,8 @@ export function useWebSocket() {
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
+        if (!mounted.current) return;
+        
         console.log('WebSocket connected successfully');
         setIsConnected(true);
         reconnectAttempts.current = 0;
@@ -165,9 +181,10 @@ export function useWebSocket() {
       };
 
       ws.current.onmessage = (event) => {
+        if (!mounted.current) return;
+        
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
-          console.log('Received WebSocket message:', message.type);
           
           switch (message.type) {
             case 'newLog':
@@ -180,9 +197,9 @@ export function useWebSocket() {
               
             case 'logs':
               if (Array.isArray(message.data)) {
-                setLogs(message.data);
+                setLogsDirectly(message.data);
               } else if (Array.isArray(message.data?.logs)) {
-                setLogs(message.data.logs);
+                setLogsDirectly(message.data.logs);
               }
               break;
               
@@ -208,6 +225,10 @@ export function useWebSocket() {
               sendMessage({ type: 'getStats' });
               break;
               
+            case 'geoProcessingStatus':
+              // Handle geo processing status if needed
+              break;
+              
             case 'clear':
               clearData();
               break;
@@ -221,6 +242,8 @@ export function useWebSocket() {
       };
 
       ws.current.onclose = (event) => {
+        if (!mounted.current) return;
+        
         console.log('WebSocket disconnected:', event.code, event.reason);
         setIsConnected(false);
         
@@ -234,8 +257,10 @@ export function useWebSocket() {
           console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts.current + 1}/${maxReconnectAttempts})`);
           
           reconnectTimeout.current = setTimeout(() => {
-            reconnectAttempts.current += 1;
-            connect();
+            if (mounted.current) {
+              reconnectAttempts.current += 1;
+              connect();
+            }
           }, delay);
         } else {
           console.error('Max reconnection attempts reached');
@@ -248,7 +273,7 @@ export function useWebSocket() {
     } catch (error) {
       console.error('Failed to connect WebSocket:', error);
     }
-  }, [updateLogs, updateStats, clearData]);
+  }, [updateLogs, setLogsDirectly, updateStats, clearData]);
 
   const sendMessage = useCallback((message: any) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
@@ -274,10 +299,13 @@ export function useWebSocket() {
 
   // Connect on mount and cleanup on unmount
   useEffect(() => {
+    mounted.current = true;
     connect();
 
     // Cleanup function
     return () => {
+      mounted.current = false;
+      
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
       }
@@ -290,7 +318,7 @@ export function useWebSocket() {
   // Periodically check connection health
   useEffect(() => {
     const healthCheck = setInterval(() => {
-      if (!isConnected && ws.current?.readyState !== WebSocket.CONNECTING) {
+      if (mounted.current && !isConnected && ws.current?.readyState !== WebSocket.CONNECTING) {
         console.log('Health check: reconnecting...');
         connect();
       }

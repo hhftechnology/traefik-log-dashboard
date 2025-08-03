@@ -13,8 +13,11 @@ RUN go mod download
 # Copy source code
 COPY *.go ./
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+# Build the application with optimizations
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-w -s" \
+    -a -installsuffix cgo \
+    -o main .
 
 # Production stage
 FROM alpine:latest
@@ -38,6 +41,10 @@ ENV TRAEFIK_LOG_FILE=/logs/traefik.log
 ENV USE_MAXMIND=false
 ENV MAXMIND_DB_PATH=/maxmind/GeoLite2-City.mmdb
 ENV MAXMIND_FALLBACK_ONLINE=true
+
+# Set Go runtime environment variables for better memory management
+ENV GOGC=50
+ENV GOMEMLIMIT=500MiB
 
 # Add MaxMind database volume
 VOLUME ["/maxmind"]
