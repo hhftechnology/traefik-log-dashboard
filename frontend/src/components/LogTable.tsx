@@ -234,7 +234,8 @@ export function LogTable({ logs: realtimeLogs, isConnected }: LogTableProps) {
   // Calculate display logs for current page
 const startIndex = 0;
 const endIndex = Math.min(pageSize, filteredLogs.length);
-  const displayLogs = sortedLogs.slice(startIndex, endIndex);
+// const displayLogs = sortedLogs.slice(startIndex, endIndex);
+   const displayLogs = filteredLogs;
 
   // Reset to first page when filters change
   useEffect(() => {
@@ -514,6 +515,8 @@ const endIndex = Math.min(pageSize, filteredLogs.length);
                 <SelectItem value="50">50</SelectItem>
                 <SelectItem value="100">100</SelectItem>
                 <SelectItem value="200">200</SelectItem>
+                <SelectItem value="500">500</SelectItem>
+                <SelectItem value="1000">1000</SelectItem>
               </SelectContent>
             </Select>
             <span className="text-sm text-muted-foreground">entries</span>
