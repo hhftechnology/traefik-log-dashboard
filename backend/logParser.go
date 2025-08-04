@@ -304,6 +304,16 @@ func (lp *LogParser) loadRecentLogs(filePath string, maxLines int) {
 	}
 }
 
+func determineClientAddr(raw map[string]interface{}) string {
+    if v := getStringValue(raw, "request_X-Forwarded-For", ""); v != "" {
+        return v
+    }
+    if v := getStringValue(raw, "request_Cf-Connecting-Ip", ""); v != "" {
+        return v
+    }
+    return getStringValue(raw, "ClientAddr", "")
+}
+
 func (lp *LogParser) parseLine(line string, emit bool) {
 	if strings.TrimSpace(line) == "" {
 		return
@@ -314,10 +324,11 @@ func (lp *LogParser) parseLine(line string, emit bool) {
 		return // Ignore non-JSON lines
 	}
 
+
 	logEntry := LogEntry{
 		ID:           fmt.Sprintf("%d-%d", time.Now().UnixNano(), len(lp.logs)),
 		Timestamp:    getStringValue(raw, "time", time.Now().Format(time.RFC3339)),
-		ClientIP:     lp.extractIP(getStringValue(raw, "ClientAddr", "")),
+		ClientIP:     lp.extractIP(determineClientAddr(raw)),
 		Method:       getStringValue(raw, "RequestMethod", "GET"),
 		Path:         getStringValue(raw, "RequestPath", ""),
 		Status:       getIntValue(raw, "DownstreamStatus", 0),
