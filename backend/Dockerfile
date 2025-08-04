@@ -13,8 +13,11 @@ RUN go mod download
 # Copy source code
 COPY *.go ./
 
-# Build the application with optimizations
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+# Build the application with optimizations for target architecture
+# Use TARGETARCH and TARGETOS from buildx automatically
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
     -ldflags="-w -s" \
     -a -installsuffix cgo \
     -o main .
