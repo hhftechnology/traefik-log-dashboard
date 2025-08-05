@@ -1,119 +1,176 @@
-# This workflow builds and pushes multi-platform (linux/amd64, linux/arm64, linux/arm/v7)
-# Docker images to both Docker Hub and GitHub Container Registry.
-
 name: Build and Push Docker Images
 
 on:
   push:
-    branches: [ main ]
-    # Triggers on git tags like v1.0.0, v1.0.6, etc.
-    tags: [ 'v*.*.*' ]
-  pull_request:
-    branches: [ main ]
-  # Allow manual trigger
+    branches:
+      - main
+      - master
+      - dev
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/**'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 env:
-  # Use docker.io for Docker Hub if empty
-  REGISTRY_DOCKERHUB: docker.io
-  REGISTRY_GHCR: ghcr.io
+  DOCKERHUB_USERNAME_VAR: ${{ secrets.DOCKERHUB_USERNAME }}
 
 jobs:
-  build-and-push:
+  build-backend:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      # This is used to complete the identity challenge
-      # with sigstore/fulcio when running outside of PRs.
-      id-token: write
-
-    strategy:
-      # Build images for both backend and frontend services in parallel
-      matrix:
-        service: [backend, frontend]
-
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
-
-      # Set up QEMU to enable emulation for multi-architecture builds
+        
+      - name: Debug trigger
+        run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Ref name: ${{ github.ref_name }}"
+          echo "Service: backend"
+          
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-        with:
-          platforms: all
-
-      # Set up Docker Buildx, a CLI plugin for extended build capabilities
+        
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        with:
-          # Enable buildkit for better caching and multi-platform support
-          driver-opts: |
-            network=host
-
-      # Log in to Docker Hub using secrets
-      - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
+        
+      - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY_DOCKERHUB }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # Log in to GitHub Container Registry
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          # Construct the full image names for both registries
-          images: |
-            ${{ env.REGISTRY_DOCKERHUB }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-${{ matrix.service }}
-            ${{ env.REGISTRY_GHCR }}/${{ github.repository }}-${{ matrix.service }}
-          tags: |
-            # Tag with the git branch name on push to a branch
-            type=ref,event=branch
-            # Tag with 'pr-#' on pull requests  
-            type=ref,event=pr
-            # Tag with the semantic version (e.g., v1.2.3, v1.2, v1) on git tag events
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            # Tag with the git SHA (short) - only for branch pushes, not tags
-            type=sha,prefix={{branch}}-,enable={{is_default_branch}}
-            type=sha,prefix=branch-,enable=${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}
-            # Tag as 'latest' for main branch and release tags
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-          labels: |
-            org.opencontainers.image.title=${{ github.event.repository.name }}-${{ matrix.service }}
-            org.opencontainers.image.description=Traefik Log Dashboard - ${{ matrix.service }} service
-            org.opencontainers.image.vendor=HHF Technology
-            org.opencontainers.image.licenses=MIT
-
-      # Build the image for multiple platforms and push to both registries
-      - name: Build and push Docker image
+          
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+        
+      - name: Prepare Docker tags
+        id: docker_tags
+        run: |
+          IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-backend"
+          TAGS=""
+          
+          # Add branch-specific tags
+          if [[ "${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "master" ]]; then
+            TAGS="$TAGS $IMAGE_NAME:latest"
+          elif [[ "${{ github.ref_name }}" == "dev" ]]; then
+            TAGS="$TAGS $IMAGE_NAME:dev"
+          elif [[ "${{ github.ref_type }}" == "branch" ]]; then
+            TAGS="$TAGS $IMAGE_NAME:${{ github.ref_name }}"
+          fi
+          
+          # Add sha tag for branches
+          if [[ "${{ github.ref_type }}" == "branch" ]]; then
+            TAGS="$TAGS,$IMAGE_NAME:sha-${GITHUB_SHA::7}"
+          fi
+          
+          # Add version tag for tagged releases
+          if [[ "${{ github.ref_type }}" == "tag" && "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            TAGS="$TAGS,$IMAGE_NAME:$VERSION"
+            TAGS="$TAGS,$IMAGE_NAME:latest"
+          fi
+          
+          # Add date tag
+          TAGS="$TAGS,$IMAGE_NAME:${{ steps.date.outputs.date }}"
+          
+          # Clean up tags
+          TAGS=$(echo "$TAGS" | sed 's/^[ ,]*//')
+          
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          echo "Backend Docker tags: $TAGS"
+          
+      - name: Build and push backend
         uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.service }}
-          # Build for amd64, arm64, and arm/v7 (Raspberry Pi) architectures
+          context: ./backend
+          push: true
           platforms: linux/amd64,linux/arm64,linux/arm/v7
-          # Push the image only when the event is not a pull request
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          # Use GitHub Actions cache for faster builds
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # Add build arguments for debugging
-          build-args: |
-            BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-            VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
-            REVISION=${{ github.sha }}
+          tags: ${{ steps.docker_tags.outputs.tags }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
 
-  # Create a summary job that depends on all builds
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Debug trigger
+        run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Ref name: ${{ github.ref_name }}"
+          echo "Service: frontend"
+          
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          
+      - name: Get current date
+        id: date
+        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+        
+      - name: Prepare Docker tags
+        id: docker_tags
+        run: |
+          IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-frontend"
+          TAGS=""
+          
+          # Add branch-specific tags
+          if [[ "${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "master" ]]; then
+            TAGS="$TAGS $IMAGE_NAME:latest"
+          elif [[ "${{ github.ref_name }}" == "dev" ]]; then
+            TAGS="$TAGS $IMAGE_NAME:dev"
+          elif [[ "${{ github.ref_type }}" == "branch" ]]; then
+            TAGS="$TAGS $IMAGE_NAME:${{ github.ref_name }}"
+          fi
+          
+          # Add sha tag for branches
+          if [[ "${{ github.ref_type }}" == "branch" ]]; then
+            TAGS="$TAGS,$IMAGE_NAME:sha-${GITHUB_SHA::7}"
+          fi
+          
+          # Add version tag for tagged releases
+          if [[ "${{ github.ref_type }}" == "tag" && "${{ github.ref }}" == refs/tags/v* ]]; then
+            VERSION="${{ github.ref_name }}"
+            TAGS="$TAGS,$IMAGE_NAME:$VERSION"
+            TAGS="$TAGS,$IMAGE_NAME:latest"
+          fi
+          
+          # Add date tag
+          TAGS="$TAGS,$IMAGE_NAME:${{ steps.date.outputs.date }}"
+          
+          # Clean up tags
+          TAGS=$(echo "$TAGS" | sed 's/^[ ,]*//')
+          
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+          echo "Frontend Docker tags: $TAGS"
+          
+      - name: Build and push frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          tags: ${{ steps.docker_tags.outputs.tags }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
   build-summary:
     runs-on: ubuntu-latest
-    needs: [build-and-push]
+    needs: [build-backend, build-frontend]
     if: always()
     steps:
       - name: Build Summary
@@ -124,18 +181,13 @@ jobs:
           echo "**Branch/Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Images pushed:**" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-backend\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-frontend\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms:** linux/amd64, linux/arm64, linux/arm/v7" >> $GITHUB_STEP_SUMMARY
           
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "**Images pushed to:**" >> $GITHUB_STEP_SUMMARY
-            echo "- Docker Hub: \`docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-{backend,frontend}\`" >> $GITHUB_STEP_SUMMARY
-            echo "- GitHub Packages: \`ghcr.io/${{ github.repository }}-{backend,frontend}\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Platforms:** linux/amd64, linux/arm64, linux/arm/v7" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "**Note:** Images were built but not pushed (pull request)" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if [ "${{ needs.build-and-push.result }}" == "success" ]; then
+          if [ "${{ needs.build-backend.result }}" == "success" ] && [ "${{ needs.build-frontend.result }}" == "success" ]; then
             echo "✅ All builds completed successfully!" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Some builds failed. Check the logs above." >> $GITHUB_STEP_SUMMARY
