@@ -5,11 +5,11 @@ name: Build and Push Docker Images
 
 on:
   push:
-    branches: [ dev ]
+    branches: [ main ]
     # Triggers on git tags like v1.0.0, v1.0.6, etc.
     tags: [ 'v*.*.*' ]
   pull_request:
-    branches: [ dev ]
+    branches: [ main ]
   # Allow manual trigger
   workflow_dispatch:
 
