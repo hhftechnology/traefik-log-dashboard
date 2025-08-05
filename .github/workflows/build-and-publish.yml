@@ -1,15 +1,22 @@
+# This workflow builds and pushes multi-platform (linux/amd64, linux/arm64, linux/arm/v7)
+# Docker images to both Docker Hub and GitHub Container Registry.
+
 name: Build and Push Docker Images
 
 on:
   push:
-    branches: [ main ]
+    branches: [ dev ]
+    # Triggers on git tags like v1.0.0, v1.0.6, etc.
     tags: [ 'v*.*.*' ]
   pull_request:
-    branches: [ main ]
+    branches: [ dev ]
+  # Allow manual trigger
+  workflow_dispatch:
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Use docker.io for Docker Hub if empty
+  REGISTRY_DOCKERHUB: docker.io
+  REGISTRY_GHCR: ghcr.io
 
 jobs:
   build-and-push:
@@ -17,8 +24,12 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # This is used to complete the identity challenge
+      # with sigstore/fulcio when running outside of PRs.
+      id-token: write
 
     strategy:
+      # Build images for both backend and frontend services in parallel
       matrix:
         service: [backend, frontend]
 
@@ -26,42 +37,114 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Add this step to set up QEMU for multi-arch builds
+      # Set up QEMU to enable emulation for multi-architecture builds
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
 
+      # Set up Docker Buildx, a CLI plugin for extended build capabilities
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          # Enable buildkit for better caching and multi-platform support
+          driver-opts: |
+            network=host
 
-      - name: Log in to the Container registry
+      # Log in to Docker Hub using secrets
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.REGISTRY_DOCKERHUB }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Log in to GitHub Container Registry
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
+      # Extract metadata (tags and labels) for the Docker image
+      - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          # Construct the full image names for both registries
+          images: |
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-${{ matrix.service }}
+            ${{ env.REGISTRY_GHCR }}/${{ github.repository }}-${{ matrix.service }}
           tags: |
+            # Tag with the git branch name on push to a branch
             type=ref,event=branch
+            # Tag with 'pr-#' on pull requests  
             type=ref,event=pr
+            # Tag with the semantic version (e.g., v1.2.3, v1.2, v1) on git tag events
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=sha
+            # Tag with the git SHA (short)
+            type=sha,prefix={{branch}}-
+            # Tag as 'latest' for main branch and release tags
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          labels: |
+            org.opencontainers.image.title=${{ github.event.repository.name }}-${{ matrix.service }}
+            org.opencontainers.image.description=Traefik Log Dashboard - ${{ matrix.service }} service
+            org.opencontainers.image.vendor=HHF Technology
+            org.opencontainers.image.licenses=MIT
 
+      # Build the image for multiple platforms and push to both registries
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./${{ matrix.service }}
-          # Add the platforms key to build for amd64 and arm64
-          platforms: linux/amd64, linux/arm64
+          # Build for amd64, arm64, and arm/v7 (Raspberry Pi) architectures
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          # Push the image only when the event is not a pull request
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # Use GitHub Actions cache for faster builds
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Add build arguments for debugging
+          build-args: |
+            BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+            REVISION=${{ github.sha }}
 
+  # Create a summary job that depends on all builds
+  build-summary:
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: always()
+    steps:
+      - name: Build Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Event:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch/Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "**Images pushed to:**" >> $GITHUB_STEP_SUMMARY
+            echo "- Docker Hub: \`docker.io/${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-{backend,frontend}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- GitHub Packages: \`ghcr.io/${{ github.repository }}-{backend,frontend}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Platforms:** linux/amd64, linux/arm64, linux/arm/v7" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Note:** Images were built but not pushed (pull request)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ needs.build-and-push.result }}" == "success" ]; then
+            echo "✅ All builds completed successfully!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some builds failed. Check the logs above." >> $GITHUB_STEP_SUMMARY
+          fi
