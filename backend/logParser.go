@@ -63,6 +63,10 @@ type LogEntry struct {
 	TLSClientSubject        string  `json:"TLSClientSubject,omitempty"`
 	TraceId                 string  `json:"TraceId,omitempty"`
 	SpanId                  string  `json:"SpanId,omitempty"`
+	
+	// OTLP-specific metadata
+	DataSource              string  `json:"dataSource,omitempty"` // "logfile", "otlp"
+	OTLPReceiveTime         string  `json:"otlpReceiveTime,omitempty"`
 }
 
 type RawLogEntry map[string]interface{}
@@ -89,6 +93,11 @@ type Stats struct {
 	OldestLogTime          string                 `json:"oldestLogTime"`
 	NewestLogTime          string                 `json:"newestLogTime"`
 	AnalysisPeriod         string                 `json:"analysisPeriod"`
+	
+	// OTLP-specific stats
+	OTLPRequests           int                    `json:"otlpRequests"`
+	LogFileRequests        int                    `json:"logFileRequests"`
+	DataSources            map[string]int         `json:"dataSources"`
 }
 
 type IPCount struct {
@@ -129,6 +138,7 @@ type Filters struct {
 	Router         string `json:"router"`
 	HideUnknown    bool   `json:"hideUnknown"`
 	HidePrivateIPs bool   `json:"hidePrivateIPs"`
+	DataSource     string `json:"dataSource"` // "logfile", "otlp", "all"
 }
 
 type LogsResult struct {
@@ -165,6 +175,11 @@ type LogParser struct {
 	newestLogTime         time.Time
 	stopChan              chan struct{}
 	geoStopChan           chan struct{}
+	
+	// OTLP-specific fields
+	otlpRequestCount      int
+	logFileRequestCount   int
+	dataSourceCounts      map[string]int
 }
 
 func NewLogParser() *LogParser {
@@ -178,6 +193,7 @@ func NewLogParser() *LogParser {
 			Routers:         make(map[string]int),
 			Methods:         make(map[string]int),
 			Countries:       make(map[string]int),
+			DataSources:     make(map[string]int),
 		},
 		lastTimestamp:        time.Now(),
 		geoProcessingQueue:   make([]string, 0),
@@ -192,6 +208,7 @@ func NewLogParser() *LogParser {
 		newestLogTime:        time.Time{},
 		stopChan:             make(chan struct{}),
 		geoStopChan:          make(chan struct{}),
+		dataSourceCounts:     make(map[string]int),
 	}
 }
 
@@ -573,42 +590,12 @@ func (lp *LogParser) parseLine(line string, emit bool) bool {
 		TLSClientSubject:   getStringValue(raw, "TLSClientSubject", ""),
 		TraceId:            getStringValue(raw, "TraceId", ""),
 		SpanId:             getStringValue(raw, "SpanId", ""),
+		
+		// Mark as log file source
+		DataSource:         "logfile",
 	}
 
-	// Try to get geolocation from cache immediately
-	if logEntry.ClientIP != "unknown" && !lp.isPrivateIP(logEntry.ClientIP) {
-		if geoData := GetGeoLocationFromCache(logEntry.ClientIP); geoData != nil {
-			logEntry.Country = &geoData.Country
-			logEntry.City = &geoData.City
-			logEntry.CountryCode = &geoData.CountryCode
-			logEntry.Lat = &geoData.Lat
-			logEntry.Lon = &geoData.Lon
-		}
-	}
-
-	lp.updateStats(&logEntry)
-
-	lp.mu.Lock()
-	// Add log to the main logs slice
-	lp.logs = append([]LogEntry{logEntry}, lp.logs...)
-	if len(lp.logs) > lp.maxLogs {
-		lp.logs = lp.logs[:lp.maxLogs]
-	}
-
-	// Add to geo processing queue if needed and not in cache
-	if logEntry.ClientIP != "unknown" && !lp.isPrivateIP(logEntry.ClientIP) && logEntry.Country == nil {
-		if !lp.processedIPs[logEntry.ClientIP] {
-			lp.geoProcessingQueue = append(lp.geoProcessingQueue, logEntry.ClientIP)
-			lp.processedIPs[logEntry.ClientIP] = true
-		}
-	}
-	lp.mu.Unlock()
-
-	if emit {
-		lp.notifyListeners(logEntry)
-	}
-
-	return true
+	return lp.processLogEntry(&logEntry, emit)
 }
 
 // Check if a raw log entry looks like a valid Traefik log
@@ -638,6 +625,65 @@ func (lp *LogParser) isValidTraefikLog(raw RawLogEntry) bool {
 	return false
 }
 
+// OTLP Log Entry Processing - Main entry point for OTLP data
+func (lp *LogParser) ProcessOTLPLogEntry(logEntry LogEntry) {
+	// Set OTLP-specific metadata
+	logEntry.DataSource = "otlp"
+	logEntry.OTLPReceiveTime = time.Now().Format(time.RFC3339)
+	
+	// Process the same way as file-based log entries
+	lp.processLogEntry(&logEntry, true) // Always emit OTLP entries for real-time updates
+	
+	log.Printf("[LogParser] Processed OTLP log entry - Trace: %s, Span: %s", logEntry.TraceId, logEntry.SpanId)
+}
+
+// Common log entry processing logic used by both file and OTLP entries
+func (lp *LogParser) processLogEntry(logEntry *LogEntry, emit bool) bool {
+	// Try to get geolocation from cache immediately
+	if logEntry.ClientIP != "unknown" && !lp.isPrivateIP(logEntry.ClientIP) {
+		if geoData := GetGeoLocationFromCache(logEntry.ClientIP); geoData != nil {
+			logEntry.Country = &geoData.Country
+			logEntry.City = &geoData.City
+			logEntry.CountryCode = &geoData.CountryCode
+			logEntry.Lat = &geoData.Lat
+			logEntry.Lon = &geoData.Lon
+		}
+	}
+
+	lp.updateStats(logEntry)
+
+	lp.mu.Lock()
+	// Add log to the main logs slice
+	lp.logs = append([]LogEntry{*logEntry}, lp.logs...)
+	if len(lp.logs) > lp.maxLogs {
+		lp.logs = lp.logs[:lp.maxLogs]
+	}
+
+	// Add to geo processing queue if needed and not in cache
+	if logEntry.ClientIP != "unknown" && !lp.isPrivateIP(logEntry.ClientIP) && logEntry.Country == nil {
+		if !lp.processedIPs[logEntry.ClientIP] {
+			lp.geoProcessingQueue = append(lp.geoProcessingQueue, logEntry.ClientIP)
+			lp.processedIPs[logEntry.ClientIP] = true
+		}
+	}
+	
+	// Update data source counters
+	lp.dataSourceCounts[logEntry.DataSource]++
+	if logEntry.DataSource == "otlp" {
+		lp.otlpRequestCount++
+	} else if logEntry.DataSource == "logfile" {
+		lp.logFileRequestCount++
+	}
+	
+	lp.mu.Unlock()
+
+	if emit {
+		lp.notifyListeners(*logEntry)
+	}
+
+	return true
+}
+
 func (lp *LogParser) ClearLogs() {
 	lp.mu.Lock()
 	defer lp.mu.Unlock()
@@ -654,6 +700,7 @@ func (lp *LogParser) ClearLogs() {
 		Routers:         make(map[string]int),
 		Methods:         make(map[string]int),
 		Countries:       make(map[string]int),
+		DataSources:     make(map[string]int),
 	}
 	
 	// Reset counters
@@ -667,6 +714,11 @@ func (lp *LogParser) ClearLogs() {
 	lp.totalDataTransmitted = 0
 	lp.oldestLogTime = time.Time{}
 	lp.newestLogTime = time.Time{}
+	
+	// Reset OTLP counters
+	lp.otlpRequestCount = 0
+	lp.logFileRequestCount = 0
+	lp.dataSourceCounts = make(map[string]int)
 	
 	// Clear geo processing data
 	lp.geoProcessingQueue = make([]string, 0)
@@ -784,6 +836,11 @@ func (lp *LogParser) updateStats(log *LogEntry) {
 		lp.stats.Countries[key]++
 	}
 
+	// Update data source statistics
+	if log.DataSource != "" {
+		lp.stats.DataSources[log.DataSource]++
+	}
+
 	// Update total data transmitted
 	lp.totalDataTransmitted += int64(log.Size)
 	
@@ -829,6 +886,14 @@ func (lp *LogParser) GetStats() Stats {
 
 	// Add new fields
 	stats.TotalDataTransmitted = lp.totalDataTransmitted
+	
+	// Add OTLP-specific stats
+	stats.OTLPRequests = lp.otlpRequestCount
+	stats.LogFileRequests = lp.logFileRequestCount
+	stats.DataSources = make(map[string]int)
+	for source, count := range lp.dataSourceCounts {
+		stats.DataSources[source] = count
+	}
 	
 	// Format timestamps
 	if !lp.oldestLogTime.IsZero() {
@@ -915,6 +980,10 @@ func (lp *LogParser) GetLogs(params LogsParams) LogsResult {
 			continue
 		}
 		if params.Filters.HidePrivateIPs && lp.isPrivateIP(log.ClientIP) {
+			continue
+		}
+		// New: Data source filter
+		if params.Filters.DataSource != "" && params.Filters.DataSource != "all" && log.DataSource != params.Filters.DataSource {
 			continue
 		}
 		
@@ -1010,6 +1079,25 @@ func (lp *LogParser) IsProcessingGeo() bool {
 	lp.mu.RLock()
 	defer lp.mu.RUnlock()
 	return lp.isProcessingGeo
+}
+
+// Get OTLP-specific statistics
+func (lp *LogParser) GetOTLPStats() map[string]interface{} {
+	lp.mu.RLock()
+	defer lp.mu.RUnlock()
+	
+	return map[string]interface{}{
+		"otlpRequests":       lp.otlpRequestCount,
+		"logFileRequests":    lp.logFileRequestCount,
+		"totalRequests":      lp.stats.TotalRequests,
+		"dataSources":        lp.dataSourceCounts,
+		"otlpPercentage":     func() float64 {
+			if lp.stats.TotalRequests == 0 {
+				return 0.0
+			}
+			return float64(lp.otlpRequestCount) / float64(lp.stats.TotalRequests) * 100
+		}(),
+	}
 }
 
 func (lp *LogParser) startGeoProcessing() {

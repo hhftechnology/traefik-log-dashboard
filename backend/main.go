@@ -20,6 +20,7 @@ import (
 
 var (
 	logParser *LogParser
+	otlpReceiver *OTLPReceiver
 	upgrader  = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true // Allow connections from any origin

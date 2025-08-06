@@ -7,10 +7,11 @@ require (
 	github.com/gin-contrib/cors v1.5.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/gorilla/websocket v1.5.1
-	github.com/hpcloud/tail v1.0.0
 	github.com/joho/godotenv v1.5.1
 	github.com/oschwald/geoip2-golang v1.9.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	go.opentelemetry.io/collector/pdata v1.0.1
+	google.golang.org/grpc v1.60.1
 )
 
 require (
@@ -43,7 +44,10 @@ require (
 )
 
 require (
+	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	gopkg.in/fsnotify.v1 v1.4.7 // indirect
-	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231127180814-3a041ad873d4 // indirect
 )
