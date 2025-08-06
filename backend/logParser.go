@@ -7,12 +7,12 @@ import (
 	"log"
 	"math"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
 )
 
 type LogEntry struct {
@@ -147,7 +147,7 @@ type GeoStats struct {
 type LogParser struct {
 	logs                  []LogEntry
 	maxLogs               int
-	fileWatcher           *FileWatcher
+	fileWatchers          []*FileWatcher  // Changed: support multiple watchers
 	stats                 Stats
 	lastTimestamp         time.Time
 	requestsInLastSecond  int
@@ -171,6 +171,7 @@ func NewLogParser() *LogParser {
 	return &LogParser{
 		logs:            make([]LogEntry, 0),
 		maxLogs:         10000,
+		fileWatchers:    make([]*FileWatcher, 0), // Initialize as slice
 		stats:           Stats{
 			StatusCodes:     make(map[int]int),
 			Services:        make(map[string]int),
@@ -198,9 +199,13 @@ func (lp *LogParser) Stop() {
 	close(lp.stopChan)
 	close(lp.geoStopChan)
 	
-	if lp.fileWatcher != nil {
-		lp.fileWatcher.Stop()
+	// Stop all file watchers
+	for _, fw := range lp.fileWatchers {
+		if fw != nil {
+			fw.Stop()
+		}
 	}
+	lp.fileWatchers = nil
 	
 	// Clean up listeners
 	lp.mu.Lock()
@@ -211,36 +216,238 @@ func (lp *LogParser) Stop() {
 	lp.mu.Unlock()
 }
 
+// Enhanced function to handle multiple paths and directories
 func (lp *LogParser) SetLogFiles(logPaths []string) error {
-	// Stop existing file watcher
-	if lp.fileWatcher != nil {
-		lp.fileWatcher.Stop()
-		lp.fileWatcher = nil
+	// Stop existing file watchers
+	for _, fw := range lp.fileWatchers {
+		if fw != nil {
+			fw.Stop()
+		}
+	}
+	lp.fileWatchers = nil
+
+	log.Printf("Setting up monitoring for %d log path(s)", len(logPaths))
+
+	var filesToMonitor []string
+
+	// Process each path
+	for _, path := range logPaths {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+
+		// Remove trailing slash for consistency
+		if strings.HasSuffix(path, "/") && len(path) > 1 {
+			path = path[:len(path)-1]
+		}
+
+		// Check if path exists
+		info, err := os.Stat(path)
+		if err != nil {
+			log.Printf("Warning: Path %s does not exist: %v", path, err)
+			continue
+		}
+
+		if info.IsDir() {
+			// It's a directory - find log files
+			foundFiles, err := lp.findLogFilesInDirectory(path)
+			if err != nil {
+				log.Printf("Error scanning directory %s: %v", path, err)
+				continue
+			}
+			filesToMonitor = append(filesToMonitor, foundFiles...)
+		} else {
+			// It's a file
+			filesToMonitor = append(filesToMonitor, path)
+		}
 	}
 
-	log.Printf("Setting up monitoring for log file(s): %v", logPaths)
+	if len(filesToMonitor) == 0 {
+		return fmt.Errorf("no valid log files found in provided paths: %v", logPaths)
+	}
 
-	// Only use the first log file
-	if len(logPaths) > 0 {
-		fw, err := NewFileWatcher(logPaths[0], lp)
+	log.Printf("Found %d log files to monitor: %v", len(filesToMonitor), filesToMonitor)
+
+	// Create file watchers for each file
+	for _, filePath := range filesToMonitor {
+		fw, err := NewFileWatcher(filePath, lp)
 		if err != nil {
-			return fmt.Errorf("failed to create file watcher: %v", err)
+			log.Printf("Failed to create file watcher for %s: %v", filePath, err)
+			continue
 		}
-		lp.fileWatcher = fw
-		
-		// Load only last 1000 lines for initial history
-		lp.loadRecentLogs(logPaths[0], 1000)
-		
+
+		lp.fileWatchers = append(lp.fileWatchers, fw)
+
+		// Load recent logs from this file (reduced per file to avoid memory issues)
+		lp.loadRecentLogs(filePath, 500)
+
 		// Start file watching
 		if err := fw.Start(); err != nil {
-			return fmt.Errorf("failed to start file watcher: %v", err)
+			log.Printf("Failed to start file watcher for %s: %v", filePath, err)
+			continue
 		}
+
+		log.Printf("Setting up tail for file: %s", filePath)
 	}
+
+	if len(lp.fileWatchers) == 0 {
+		return fmt.Errorf("failed to start any file watchers for paths: %v", logPaths)
+	}
+
+	log.Printf("Successfully started %d file watchers", len(lp.fileWatchers))
 
 	// Start geo processing
 	go lp.startGeoProcessing()
 
 	return nil
+}
+
+// Find log files in a directory
+func (lp *LogParser) findLogFilesInDirectory(dirPath string) ([]string, error) {
+	var logFiles []string
+
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Printf("Warning: Error accessing %s: %v", path, err)
+			return nil // Continue walking
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			return nil
+		}
+
+		// Skip very small files (likely empty)
+		if info.Size() < 50 {
+			return nil
+		}
+
+		// Check if it's likely a log file
+		if lp.isLogFile(path, info) {
+			logFiles = append(logFiles, path)
+			log.Printf("Found log file: %s (size: %d bytes, modified: %s)", 
+				path, info.Size(), info.ModTime().Format(time.RFC3339))
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort files by modification time (newest first)
+	sort.Slice(logFiles, func(i, j int) bool {
+		infoI, errI := os.Stat(logFiles[i])
+		infoJ, errJ := os.Stat(logFiles[j])
+		if errI != nil || errJ != nil {
+			return false
+		}
+		return infoI.ModTime().After(infoJ.ModTime())
+	})
+
+	log.Printf("Found %d log files in directory %s", len(logFiles), dirPath)
+	return logFiles, nil
+}
+
+// Determine if a file is likely a log file
+func (lp *LogParser) isLogFile(path string, info os.FileInfo) bool {
+	name := strings.ToLower(info.Name())
+	
+	// Common log file patterns
+	logPatterns := []string{
+		".log",
+		"access",
+		"error", 
+		"traefik",
+		"nginx",
+		"apache",
+	}
+
+	// Skip very old files (older than 7 days) unless they're large
+	if time.Since(info.ModTime()) > 7*24*time.Hour && info.Size() < 1024*1024 {
+		return false
+	}
+
+	// Check for log patterns in filename
+	for _, pattern := range logPatterns {
+		if strings.Contains(name, pattern) {
+			// Additional check: if it contains "access", verify it's likely a JSON log
+			if strings.Contains(name, "access") {
+				return lp.hasJSONContent(path)
+			}
+			return true
+		}
+	}
+
+	// Check for JSON content in file (for files without obvious log extensions)
+	return lp.hasJSONContent(path)
+}
+
+// Check if file contains JSON log entries
+func (lp *LogParser) hasJSONContent(filePath string) bool {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+
+	// Read first few lines
+	buf := make([]byte, 2048)
+	n, err := file.Read(buf)
+	if err != nil && err != io.EOF {
+		return false
+	}
+
+	content := string(buf[:n])
+	lines := strings.Split(content, "\n")
+
+	jsonLinesFound := 0
+	linesChecked := 0
+
+	// Check first several lines
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if len(line) == 0 {
+			continue
+		}
+		
+		linesChecked++
+		if linesChecked > 10 { // Don't check too many lines
+			break
+		}
+
+		// Check if line looks like JSON
+		if strings.HasPrefix(line, "{") && strings.HasSuffix(line, "}") {
+			// Try to parse as JSON
+			var test map[string]interface{}
+			if json.Unmarshal([]byte(line), &test) == nil {
+				jsonLinesFound++
+				
+				// Check if it looks like a Traefik log entry
+				if _, hasTime := test["time"]; hasTime {
+					if _, hasLevel := test["level"]; hasLevel {
+						return true // Definitely looks like a Traefik log
+					}
+					if _, hasStatus := test["DownstreamStatus"]; hasStatus {
+						return true // Looks like a Traefik access log
+					}
+				}
+			}
+		}
+	}
+
+	// If more than half the checked lines are JSON, consider it a log file
+	return linesChecked > 0 && float64(jsonLinesFound)/float64(linesChecked) > 0.5
+}
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (lp *LogParser) loadRecentLogs(filePath string, maxLines int) {
@@ -296,22 +503,31 @@ func (lp *LogParser) loadRecentLogs(filePath string, maxLines int) {
 	}
 
 	// Parse the lines
-	log.Printf("Loading last %d log entries from %s", len(lines), filePath)
+	validLines := 0
 	for _, line := range lines {
 		if strings.TrimSpace(line) != "" {
-			lp.parseLine(line, false)
+			if lp.parseLine(line, false) {
+				validLines++
+			}
 		}
 	}
+	
+	log.Printf("Loading %d valid log entries from %s (out of %d lines)", validLines, filePath, len(lines))
 }
 
-func (lp *LogParser) parseLine(line string, emit bool) {
+func (lp *LogParser) parseLine(line string, emit bool) bool {
 	if strings.TrimSpace(line) == "" {
-		return
+		return false
 	}
 
 	var raw RawLogEntry
 	if err := json.Unmarshal([]byte(line), &raw); err != nil {
-		return // Ignore non-JSON lines
+		return false // Ignore non-JSON lines
+	}
+
+	// Check if this looks like a valid Traefik log entry
+	if !lp.isValidTraefikLog(raw) {
+		return false
 	}
 
 	logEntry := LogEntry{
@@ -391,6 +607,35 @@ func (lp *LogParser) parseLine(line string, emit bool) {
 	if emit {
 		lp.notifyListeners(logEntry)
 	}
+
+	return true
+}
+
+// Check if a raw log entry looks like a valid Traefik log
+func (lp *LogParser) isValidTraefikLog(raw RawLogEntry) bool {
+	// Must have a timestamp
+	if _, hasTime := raw["time"]; !hasTime {
+		return false
+	}
+
+	// For access logs, must have downstream status or request method
+	if _, hasStatus := raw["DownstreamStatus"]; hasStatus {
+		return true
+	}
+	
+	if _, hasMethod := raw["RequestMethod"]; hasMethod {
+		return true
+	}
+
+	// For other logs, check for level (but we might not want these)
+	if level, hasLevel := raw["level"]; hasLevel {
+		// Only accept error/warn logs, ignore debug/info
+		if levelStr, ok := level.(string); ok {
+			return levelStr == "error" || levelStr == "warn"
+		}
+	}
+
+	return false
 }
 
 func (lp *LogParser) ClearLogs() {
