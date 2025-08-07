@@ -20,7 +20,7 @@ A real-time dashboard for analyzing Traefik logs and OpenTelemetry traces with I
 
 ## Quick Start
 
-### Option 1: OpenTelemetry (Recommended - Real-time)
+### Option 1: OpenTelemetry (Recommended - Real-time ----beta)
 ```bash
 # Clone repository
 git clone https://github.com/hhftechnology/traefik-log-dashboard.git
@@ -37,7 +37,7 @@ docker compose -f docker-compose-otlp.yml up -d
 open http://localhost:3000
 ```
 
-### Option 2: Log File Parsing (Traditional)
+### Option 2: Log File Parsing (Traditional-Stable)
 ```bash
 # Configure for log files
 cp .env.example .env
