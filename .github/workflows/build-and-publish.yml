@@ -29,6 +29,7 @@ jobs:
           echo "Event: ${{ github.event_name }}"
           echo "Ref: ${{ github.ref }}"
           echo "Ref name: ${{ github.ref_name }}"
+          echo "Ref type: ${{ github.ref_type }}"
           echo "Service: backend"
           
       - name: Set up QEMU
@@ -53,35 +54,55 @@ jobs:
           IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-backend"
           TAGS=""
           
-          # Add branch-specific tags
-          if [[ "${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "master" ]]; then
-            TAGS="$TAGS $IMAGE_NAME:latest"
-          elif [[ "${{ github.ref_name }}" == "dev" ]]; then
-            TAGS="$TAGS $IMAGE_NAME:dev"
-          elif [[ "${{ github.ref_type }}" == "branch" ]]; then
-            TAGS="$TAGS $IMAGE_NAME:${{ github.ref_name }}"
-          fi
+          echo "Processing ref_type: ${{ github.ref_type }}"
+          echo "Processing ref: ${{ github.ref }}"
+          echo "Processing ref_name: ${{ github.ref_name }}"
           
-          # Add sha tag for branches
-          if [[ "${{ github.ref_type }}" == "branch" ]]; then
+          # Handle tagged releases first
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "Processing tag release"
+            VERSION="${{ github.ref_name }}"
+            
+            # Remove 'v' prefix if present for clean version tag
+            if [[ $VERSION == v* ]]; then
+              CLEAN_VERSION=${VERSION#v}
+              TAGS="$IMAGE_NAME:$CLEAN_VERSION,$IMAGE_NAME:$VERSION"
+            else
+              TAGS="$IMAGE_NAME:$VERSION"
+            fi
+            
+            # Always tag latest for version releases
+            TAGS="$TAGS,$IMAGE_NAME:latest"
+            
+            echo "Version tags: $TAGS"
+            
+          # Handle branch pushes
+          elif [[ "${{ github.ref_type }}" == "branch" ]]; then
+            echo "Processing branch release"
+            
+            # Add branch-specific tags
+            if [[ "${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "master" ]]; then
+              TAGS="$IMAGE_NAME:latest,$IMAGE_NAME:main"
+            elif [[ "${{ github.ref_name }}" == "dev" ]]; then
+              TAGS="$IMAGE_NAME:dev"
+            else
+              # For other branches, use branch name (sanitized)
+              BRANCH_NAME=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+              TAGS="$IMAGE_NAME:$BRANCH_NAME"
+            fi
+            
+            # Add SHA tag for branches
             TAGS="$TAGS,$IMAGE_NAME:sha-${GITHUB_SHA::7}"
           fi
           
-          # Add version tag for tagged releases
-          if [[ "${{ github.ref_type }}" == "tag" && "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION="${{ github.ref_name }}"
-            TAGS="$TAGS,$IMAGE_NAME:$VERSION"
-            TAGS="$TAGS,$IMAGE_NAME:latest"
-          fi
-          
-          # Add date tag
+          # Add date tag for all builds
           TAGS="$TAGS,$IMAGE_NAME:${{ steps.date.outputs.date }}"
           
-          # Clean up tags
-          TAGS=$(echo "$TAGS" | sed 's/^[ ,]*//')
+          # Clean up any leading commas
+          TAGS=$(echo "$TAGS" | sed 's/^,*//')
           
+          echo "Final tags: $TAGS"
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
-          echo "Backend Docker tags: $TAGS"
           
       - name: Build and push backend
         uses: docker/build-push-action@v5
@@ -104,6 +125,7 @@ jobs:
           echo "Event: ${{ github.event_name }}"
           echo "Ref: ${{ github.ref }}"
           echo "Ref name: ${{ github.ref_name }}"
+          echo "Ref type: ${{ github.ref_type }}"
           echo "Service: frontend"
           
       - name: Set up QEMU
@@ -128,35 +150,55 @@ jobs:
           IMAGE_NAME="${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-frontend"
           TAGS=""
           
-          # Add branch-specific tags
-          if [[ "${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "master" ]]; then
-            TAGS="$TAGS $IMAGE_NAME:latest"
-          elif [[ "${{ github.ref_name }}" == "dev" ]]; then
-            TAGS="$TAGS $IMAGE_NAME:dev"
-          elif [[ "${{ github.ref_type }}" == "branch" ]]; then
-            TAGS="$TAGS $IMAGE_NAME:${{ github.ref_name }}"
-          fi
+          echo "Processing ref_type: ${{ github.ref_type }}"
+          echo "Processing ref: ${{ github.ref }}"
+          echo "Processing ref_name: ${{ github.ref_name }}"
           
-          # Add sha tag for branches
-          if [[ "${{ github.ref_type }}" == "branch" ]]; then
+          # Handle tagged releases first
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "Processing tag release"
+            VERSION="${{ github.ref_name }}"
+            
+            # Remove 'v' prefix if present for clean version tag
+            if [[ $VERSION == v* ]]; then
+              CLEAN_VERSION=${VERSION#v}
+              TAGS="$IMAGE_NAME:$CLEAN_VERSION,$IMAGE_NAME:$VERSION"
+            else
+              TAGS="$IMAGE_NAME:$VERSION"
+            fi
+            
+            # Always tag latest for version releases
+            TAGS="$TAGS,$IMAGE_NAME:latest"
+            
+            echo "Version tags: $TAGS"
+            
+          # Handle branch pushes
+          elif [[ "${{ github.ref_type }}" == "branch" ]]; then
+            echo "Processing branch release"
+            
+            # Add branch-specific tags
+            if [[ "${{ github.ref_name }}" == "main" || "${{ github.ref_name }}" == "master" ]]; then
+              TAGS="$IMAGE_NAME:latest,$IMAGE_NAME:main"
+            elif [[ "${{ github.ref_name }}" == "dev" ]]; then
+              TAGS="$IMAGE_NAME:dev"
+            else
+              # For other branches, use branch name (sanitized)
+              BRANCH_NAME=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+              TAGS="$IMAGE_NAME:$BRANCH_NAME"
+            fi
+            
+            # Add SHA tag for branches
             TAGS="$TAGS,$IMAGE_NAME:sha-${GITHUB_SHA::7}"
           fi
           
-          # Add version tag for tagged releases
-          if [[ "${{ github.ref_type }}" == "tag" && "${{ github.ref }}" == refs/tags/v* ]]; then
-            VERSION="${{ github.ref_name }}"
-            TAGS="$TAGS,$IMAGE_NAME:$VERSION"
-            TAGS="$TAGS,$IMAGE_NAME:latest"
-          fi
-          
-          # Add date tag
+          # Add date tag for all builds
           TAGS="$TAGS,$IMAGE_NAME:${{ steps.date.outputs.date }}"
           
-          # Clean up tags
-          TAGS=$(echo "$TAGS" | sed 's/^[ ,]*//')
+          # Clean up any leading commas
+          TAGS=$(echo "$TAGS" | sed 's/^,*//')
           
+          echo "Final tags: $TAGS"
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
-          echo "Frontend Docker tags: $TAGS"
           
       - name: Build and push frontend
         uses: docker/build-push-action@v5
@@ -179,6 +221,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Event:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
           echo "**Branch/Tag:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Ref Type:** ${{ github.ref_type }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Images pushed:**" >> $GITHUB_STEP_SUMMARY
@@ -186,6 +229,14 @@ jobs:
           echo "- \`${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}-frontend\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Platforms:** linux/amd64, linux/arm64, linux/arm/v7" >> $GITHUB_STEP_SUMMARY
+          
+          # Show tag information
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "**Release Type:** Version Tag (${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Release Type:** Branch Build (${{ github.ref_name }})" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.build-backend.result }}" == "success" ] && [ "${{ needs.build-frontend.result }}" == "success" ]; then
             echo "✅ All builds completed successfully!" >> $GITHUB_STEP_SUMMARY
