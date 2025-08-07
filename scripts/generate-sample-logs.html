@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample App - Traefik Dashboard Testing</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2rem;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        }
+        .button {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            margin: 0.5rem;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+        .button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        .stats {
+            margin-top: 2rem;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+        .endpoint {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.5rem;
+            border-radius: 4px;
+            margin: 0.5rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Sample App for Traefik Dashboard</h1>
+        <p>This sample application generates traffic to test the Traefik Log Dashboard with OpenTelemetry support.</p>
+        
+        <h2>Generate Test Traffic</h2>
+        <p>Click the buttons below to generate different types of requests that will appear in your dashboard:</p>
+        
+        <button class="button" onclick="makeRequest('/')">🏠 Home Request</button>
+        <button class="button" onclick="makeRequest('/api/users')">👥 API Users</button>
+        <button class="button" onclick="makeRequest('/api/products')">📦 API Products</button>
+        <button class="button" onclick="makeRequest('/slow')">🐌 Slow Request</button>
+        <button class="button" onclick="makeRequest('/error')">❌ Error Request</button>
+        
+        <h3>Bulk Testing</h3>
+        <button class="button" onclick="bulkRequests(10)">📊 Generate 10 Requests</button>
+        <button class="button" onclick="bulkRequests(50)">📈 Generate 50 Requests</button>
+        
+        <div class="stats" id="stats">
+            <h3>Request Statistics</h3>
+            <div>Total Requests: <span id="totalRequests">0</span></div>
+            <div>Success: <span id="successCount">0</span></div>
+            <div>Errors: <span id="errorCount">0</span></div>
+        </div>
+
+        <h2>Available Endpoints</h2>
+        <div class="endpoint">GET / - This page (200 OK)</div>
+        <div class="endpoint">GET /api/users - User data (200 OK)</div>
+        <div class="endpoint">GET /api/products - Product data (200 OK)</div>
+        <div class="endpoint">GET /slow - Simulated slow response (200 OK after 2s)</div>
+        <div class="endpoint">GET /error - Simulated error (500 Internal Server Error)</div>
+
+        <h2>Dashboard Links</h2>
+        <p>
+            <a href="http://dashboard.localhost:3000" target="_blank" style="color: #fff; text-decoration: underline;">
+                📊 Open Traefik Log Dashboard
+            </a>
+        </p>
+        <p>
+            <a href="http://localhost:8080" target="_blank" style="color: #fff; text-decoration: underline;">
+                ⚙️ Open Traefik Dashboard
+            </a>
+        </p>
+    </div>
+
+    <script>
+        let stats = {
+            total: 0,
+            success: 0,
+            errors: 0
+        };
+
+        function updateStats() {
+            document.getElementById('totalRequests').textContent = stats.total;
+            document.getElementById('successCount').textContent = stats.success;
+            document.getElementById('errorCount').textContent = stats.errors;
+        }
+
+        async function makeRequest(endpoint) {
+            try {
+                stats.total++;
+                
+                // Add some variety to user agents for testing
+                const userAgents = [
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
+                ];
+                
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: {
+                        'User-Agent': userAgents[Math.floor(Math.random() * userAgents.length)],
+                        'X-Test-Request': 'true',
+                        'X-Request-ID': Math.random().toString(36).substr(2, 9)
+                    }
+                });
+                
+                if (response.ok) {
+                    stats.success++;
+                } else {
+                    stats.errors++;
+                }
+            } catch (error) {
+                stats.errors++;
+                console.error('Request failed:', error);
+            }
+            
+            updateStats();
+        }
+
+        async function bulkRequests(count) {
+            const endpoints = ['/', '/api/users', '/api/products', '/slow', '/error'];
+            const promises = [];
+            
+            for (let i = 0; i < count; i++) {
+                const endpoint = endpoints[Math.floor(Math.random() * endpoints.length)];
+                promises.push(makeRequest(endpoint));
+                
+                // Add small delay to spread requests out
+                await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
+            }
+            
+            await Promise.all(promises);
+        }
+
+        // Initialize stats display
+        updateStats();
+    </script>
+</body>
+</html>
