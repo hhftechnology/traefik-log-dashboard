@@ -51,6 +51,8 @@ func main() {
 		if err := otlpReceiver.Start(); err != nil {
 			log.Printf("Failed to start OTLP receiver: %v", err)
 		}
+	} else {
+		log.Printf("OTLP receiver is disabled")
 	}
 
 	// Setup graceful shutdown
@@ -114,21 +116,30 @@ func main() {
 	// WebSocket endpoint
 	r.GET("/ws", handleWebSocket)
 
-	// Start watching log files from environment variable
+	// Handle log files ONLY if OTLP is disabled OR if TRAEFIK_LOG_FILE is explicitly set
 	logFile := os.Getenv("TRAEFIK_LOG_FILE")
-	if logFile == "" {
-		logFile = "/logs/traefik.log"
-	}
-
-	// Check if multiple log files are specified
-	if strings.Contains(logFile, ",") {
-		logFiles := strings.Split(logFile, ",")
-		for i := range logFiles {
-			logFiles[i] = strings.TrimSpace(logFiles[i])
+	
+	// FIXED: Only watch log files if explicitly configured or OTLP is disabled
+	if !otlpConfig.Enabled || (logFile != "" && logFile != "none") {
+		if logFile == "" {
+			logFile = "/logs/traefik.log" // Default only when OTLP is disabled
 		}
-		go logParser.SetLogFiles(logFiles)
+		
+		log.Printf("Setting up log file monitoring for: %s", logFile)
+
+		// Check if multiple log files are specified
+		if strings.Contains(logFile, ",") {
+			logFiles := strings.Split(logFile, ",")
+			for i := range logFiles {
+				logFiles[i] = strings.TrimSpace(logFiles[i])
+			}
+			go logParser.SetLogFiles(logFiles)
+		} else {
+			go logParser.SetLogFiles([]string{logFile})
+		}
 	} else {
-		go logParser.SetLogFiles([]string{logFile})
+		log.Printf("Running in OTLP-only mode - log file monitoring disabled")
+		log.Printf("OTLP_ENABLED=%t, TRAEFIK_LOG_FILE='%s'", otlpConfig.Enabled, logFile)
 	}
 
 	// Start the server
@@ -549,6 +560,14 @@ func getWebSocketStatus(c *gin.Context) {
 
 // OTLP API Route Handlers
 func getOTLPStatus(c *gin.Context) {
+	if otlpReceiver == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "OTLP receiver is not initialized",
+			"enabled": false,
+		})
+		return
+	}
+	
 	stats := otlpReceiver.GetStats()
 	config := otlpReceiver.GetConfig()
 	
@@ -574,6 +593,14 @@ func getOTLPStats(c *gin.Context) {
 }
 
 func startOTLPReceiver(c *gin.Context) {
+	if otlpReceiver == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "OTLP receiver is not initialized",
+		})
+		return
+	}
+	
 	config := otlpReceiver.GetConfig()
 	if !config.Enabled {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -599,6 +626,14 @@ func startOTLPReceiver(c *gin.Context) {
 }
 
 func stopOTLPReceiver(c *gin.Context) {
+	if otlpReceiver == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "OTLP receiver is not initialized",
+		})
+		return
+	}
+	
 	if err := otlpReceiver.Stop(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -615,7 +650,6 @@ func stopOTLPReceiver(c *gin.Context) {
 
 func healthCheck(c *gin.Context) {
 	config := GetMaxMindConfig()
-	otlpConfig := otlpReceiver.GetConfig()
 	
 	health := gin.H{
 		"status": "ok",
@@ -635,11 +669,22 @@ func healthCheck(c *gin.Context) {
 			"totalLogs":       len(logParser.logs),
 			"isProcessingGeo": logParser.IsProcessingGeo(),
 		},
-		"otlp": gin.H{
+	}
+	
+	// Add OTLP status if receiver exists
+	if otlpReceiver != nil {
+		otlpConfig := otlpReceiver.GetConfig()
+		health["otlp"] = gin.H{
 			"enabled": otlpConfig.Enabled,
 			"running": otlpReceiver.IsRunning(),
 			"config":  otlpConfig,
-		},
+		}
+	} else {
+		health["otlp"] = gin.H{
+			"enabled": false,
+			"running": false,
+			"error":   "OTLP receiver not initialized",
+		}
 	}
 	
 	if config.DatabaseError != "" {
