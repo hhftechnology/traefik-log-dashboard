@@ -39,12 +39,14 @@ RUN mkdir -p /logs /maxmind
 EXPOSE 3001 4317 4318
 
 # Set default environment variables
+
+# Set default environment variables
 ENV PORT=3001
-ENV OTPL_ENABLED=true
+ENV OTLP_ENABLED=true
 ENV OTLP_GRPC_PORT=4317
 ENV OTLP_HTTP_PORT=4318
 ENV OTLP_DEBUG=true
-ENV TRAEFIK_LOG_FILE=/logs/traefik.log
+ENV TRAEFIK_LOG_FILE=
 ENV USE_MAXMIND=false
 ENV MAXMIND_DB_PATH=/maxmind/GeoLite2-City.mmdb
 ENV MAXMIND_FALLBACK_ONLINE=true
