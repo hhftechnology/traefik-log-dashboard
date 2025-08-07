@@ -41,10 +41,17 @@ func main() {
 	// Initialize log parser
 	logParser = NewLogParser()
 
-	// Initialize OTLP receiver with configuration
+	// Initialize OTLP receiver if enabled
 	otlpConfig := GetOTLPConfig()
-	otlpReceiver = NewOTLPReceiver(logParser, otlpConfig)
-	log.Printf("[OTLP] Configuration: %+v", otlpConfig)
+	if otlpConfig.Enabled {
+		otlpReceiver = NewOTLPReceiver(logParser, otlpConfig)
+		log.Printf("OTLP receiver initialized - GRPC:%d, HTTP:%d", otlpConfig.GRPCPort, otlpConfig.HTTPPort)
+		
+		// Start OTLP receiver
+		if err := otlpReceiver.Start(); err != nil {
+			log.Printf("Failed to start OTLP receiver: %v", err)
+		}
+	}
 
 	// Setup graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -87,15 +94,16 @@ func main() {
 	r.POST("/api/set-log-file", setLogFile)
 	r.POST("/api/set-log-files", setLogFiles)
 	
-	// MaxMind API Routes
-	r.GET("/api/maxmind/config", getMaxMindConfig)
-	r.POST("/api/maxmind/reload", reloadMaxMindDatabase)
-	r.POST("/api/maxmind/test", testMaxMindDatabase)
-	
 	// OTLP API Routes
 	r.GET("/api/otlp/status", getOTLPStatus)
 	r.POST("/api/otlp/start", startOTLPReceiver)
 	r.POST("/api/otlp/stop", stopOTLPReceiver)
+	r.GET("/api/otlp/stats", getOTLPStats)
+	
+	// MaxMind API Routes
+	r.GET("/api/maxmind/config", getMaxMindConfig)
+	r.POST("/api/maxmind/reload", reloadMaxMindDatabase)
+	r.POST("/api/maxmind/test", testMaxMindDatabase)
 	
 	// WebSocket status endpoint for debugging
 	r.GET("/api/websocket/status", getWebSocketStatus)
@@ -106,42 +114,21 @@ func main() {
 	// WebSocket endpoint
 	r.GET("/ws", handleWebSocket)
 
-	// Start OTLP receiver if enabled
-	if otlpReceiver.GetConfig().Enabled {
-		log.Println("[OTLP] Starting OTLP receiver...")
-		if err := otlpReceiver.Start(); err != nil {
-			log.Printf("[OTLP] Failed to start OTLP receiver: %v", err)
-		} else {
-			log.Println("[OTLP] OTLP receiver started successfully")
-		}
-	} else {
-		log.Println("[OTLP] OTLP receiver is disabled")
+	// Start watching log files from environment variable
+	logFile := os.Getenv("TRAEFIK_LOG_FILE")
+	if logFile == "" {
+		logFile = "/logs/traefik.log"
 	}
 
-	// Start watching log files from environment variable (only if specified or OTLP disabled)
-	logFile := os.Getenv("TRAEFIK_LOG_FILE")
-	otlpEnabled := otlpReceiver.GetConfig().Enabled
-	logFileSpecified := logFile != ""
-	
-	if !otlpEnabled || logFileSpecified {
-		log.Printf("[LogFile] Starting log file monitoring (OTLP enabled: %v, Log file specified: %v)", otlpEnabled, logFileSpecified)
-		
-		if logFile == "" {
-			logFile = "/logs/traefik.log"
+	// Check if multiple log files are specified
+	if strings.Contains(logFile, ",") {
+		logFiles := strings.Split(logFile, ",")
+		for i := range logFiles {
+			logFiles[i] = strings.TrimSpace(logFiles[i])
 		}
-		
-		// Check if multiple log files are specified
-		if strings.Contains(logFile, ",") {
-			logFiles := strings.Split(logFile, ",")
-			for i := range logFiles {
-				logFiles[i] = strings.TrimSpace(logFiles[i])
-			}
-			go logParser.SetLogFiles(logFiles)
-		} else {
-			go logParser.SetLogFiles([]string{logFile})
-		}
+		go logParser.SetLogFiles(logFiles)
 	} else {
-		log.Println("[LogFile] Skipping log file monitoring - OTLP receiver is enabled and no explicit log file specified")
+		go logParser.SetLogFiles([]string{logFile})
 	}
 
 	// Start the server
@@ -152,6 +139,7 @@ func main() {
 
 	log.Printf("Server running on port %s", port)
 	log.Printf("MaxMind configuration: %+v", GetMaxMindConfig())
+	log.Printf("OTLP configuration: %+v", otlpConfig)
 	log.Printf("WebSocket clients tracking enabled")
 	
 	// Start server with graceful shutdown
@@ -571,6 +559,18 @@ func getOTLPStatus(c *gin.Context) {
 	}
 	
 	c.JSON(http.StatusOK, status)
+}
+
+// Handler for /api/otlp/stats
+func getOTLPStats(c *gin.Context) {
+	if otlpReceiver == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "OTLP receiver is not initialized",
+		})
+		return
+	}
+	stats := otlpReceiver.GetStats()
+	c.JSON(http.StatusOK, stats)
 }
 
 func startOTLPReceiver(c *gin.Context) {
