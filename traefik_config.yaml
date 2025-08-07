@@ -49,9 +49,7 @@ tracing:
     # HTTP endpoint (recommended for most use cases)
     http:
       endpoint: "http://traefik-dashboard-backend:4318/v1/traces"
-      timeout: "10s"
-      headers:
-        "Content-Type": "application/x-protobuf"
+      insecure: true
     
     # Alternative: GRPC endpoint (better performance)
     # Uncomment the section below and comment HTTP section above for GRPC
