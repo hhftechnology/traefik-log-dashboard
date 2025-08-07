@@ -1,46 +1,58 @@
 services:
   backend:
-    build: ./backend
-    container_name: ${BACKEND_CONTAINER_NAME:-traefik-dashboard-backend}
     environment:
-      - PORT=3001
-      - TRAEFIK_LOG_FILE=/logs/access.log
-      - USE_MAXMIND=true
-      - MAXMIND_DB_PATH=/maxmind/GeoLite2-City.mmdb
-      - MAXMIND_FALLBACK_ONLINE=true
-      - GOGC=50
-      - GOMEMLIMIT=500MiB
-    volumes:
-      # Mount your Traefik log file or directory here
-      - ${TRAEFIK_LOG_PATH:-./logs}:/logs:ro
+      # Production-optimized settings
+      - LOG_LEVEL=WARN
+      - OTLP_DEBUG=false
+      - MAXMIND_FALLBACK_ONLINE=false  # Disable online fallback for privacy
+      - GOGC=20  # More aggressive garbage collection
+      - GOMEMLIMIT=768MiB
+    # Don't expose OTLP ports publicly in production
     ports:
-      - "3001:3001"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - "3001:3001"  # Only expose API port
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 768M
+        reservations:
+          cpus: '0.3'
+          memory: 192M
+      # Production restart policy
+      restart_policy:
+        condition: unless-stopped
+        delay: 5s
+        max_attempts: 3
+        window: 120s
 
   frontend:
-    build: ./frontend
-    container_name: ${FRONTEND_CONTAINER_NAME:-traefik-dashboard-frontend}
     environment:
-      - BACKEND_SERVICE=${BACKEND_SERVICE_NAME:-backend}
-      - BACKEND_PORT=${BACKEND_PORT:-3001}
+      - NODE_ENV=production
     ports:
-      - "3000:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      - "${FRONTEND_PORT:-3000}:80"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+      restart_policy:
+        condition: unless-stopped
+        delay: 5s
+        max_attempts: 3
+        window: 120s
 
-# Optionally, you can add this service to the same network as Traefik
-networks:
-  default:
-    external:
-      name: traefik_network
+  # Disable sample app and traffic generator in production
+  sample-app:
+    profiles:
+      - disabled
+
+  traffic-generator:
+    profiles:
+      - disabled
+
+  # Ensure MaxMind updater runs regularly in production
+  maxmind-updater:
+    restart: "no"  # Run once on startup

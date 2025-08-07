@@ -1,23 +1,28 @@
-# Sample Traefik configuration with JSON logging enabled
+# Enhanced Traefik configuration with OpenTelemetry OTLP support
+# This configuration enables both traditional JSON logging AND OTLP tracing
+
+# API Configuration
 api:
   dashboard: true
   debug: true
 
+# Entry Points
 entryPoints:
   web:
     address: ":80"
   websecure:
     address: ":443"
 
+# Providers
 providers:
   docker:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
     network: traefik-network
 
-# Configure JSON access logs
+# Traditional JSON access logs (can run alongside OTLP)
 accessLog:
-  filePath: "/logs/traefik.log"
+  filePath: "/logs/access.log"
   format: json
   bufferingSize: 100
   fields:
@@ -31,11 +36,38 @@ accessLog:
         Authorization: drop
         Content-Type: keep
 
-# Log configuration
+# Application logs
 log:
   level: INFO
   filePath: "/logs/traefik-app.log"
   format: json
+
+# OpenTelemetry Tracing Configuration
+tracing:
+  # OTLP Exporter Configuration
+  otlp:
+    # HTTP endpoint (recommended for most use cases)
+    http:
+      endpoint: "http://traefik-dashboard-backend:4318/v1/traces"
+      timeout: "10s"
+      headers:
+        "Content-Type": "application/x-protobuf"
+    
+    # Alternative: GRPC endpoint (better performance)
+    # Uncomment the section below and comment HTTP section above for GRPC
+    # grpc:
+    #   endpoint: "traefik-dashboard-backend:4317"
+    #   insecure: true
+    #   timeout: "10s"
+  
+  # Sampling configuration
+  sampleRate: 1.0  # 100% sampling (adjust for production: 0.1 = 10%)
+  
+  # Global attributes added to all spans
+  globalAttributes:
+    environment: "production"
+    service.version: "v3.0"
+    deployment.environment: "docker"
 
 # Certificate resolver for Let's Encrypt
 certificatesResolvers:
@@ -47,18 +79,21 @@ certificatesResolvers:
         entryPoint: web
       tlsChallenge: {}
 
-# Middleware definitions
+# Middleware definitions with tracing support
 middlewares:
+  # HTTPS redirect
   redirect-to-https:
     redirectScheme:
       scheme: https
       permanent: true
   
+  # Rate limiting with tracing
   rate-limit:
     rateLimit:
       average: 100
       burst: 50
   
+  # Security headers with tracing
   secure-headers:
     headers:
       customFrameOptionsValue: "SAMEORIGIN"
@@ -69,3 +104,35 @@ middlewares:
       stsIncludeSubdomains: true
       stsPreload: true
       stsSeconds: 31536000
+  
+  # Custom middleware for tracing metadata
+  tracing-metadata:
+    headers:
+      customRequestHeaders:
+        X-Trace-Enabled: "true"
+      customResponseHeaders:
+        X-Trace-ID: "{{.TraceID}}"
+
+# Environment-specific configurations (examples)
+# 
+# Development Configuration (high sampling):
+# tracing:
+#   otlp:
+#     http:
+#       endpoint: "http://localhost:4318/v1/traces"
+#   sampleRate: 1.0
+# 
+# Production Configuration (low sampling for performance):
+# tracing:
+#   otlp:
+#     http:
+#       endpoint: "http://traefik-dashboard-backend:4318/v1/traces"
+#   sampleRate: 0.1  # 10% sampling
+# 
+# High-Performance Configuration (GRPC with minimal sampling):
+# tracing:
+#   otlp:
+#     grpc:
+#       endpoint: "traefik-dashboard-backend:4317"
+#       insecure: true
+#   sampleRate: 0.05  # 5% sampling

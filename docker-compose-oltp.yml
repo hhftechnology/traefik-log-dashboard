@@ -1,0 +1,166 @@
+# Docker Compose configuration with full OTLP support
+# Enhanced setup with Traefik + Dashboard + OpenTelemetry integration
+
+networks:
+  traefik-network:
+    driver: bridge
+  dashboard-network:
+    driver: bridge
+
+volumes:
+  traefik-logs:
+  traefik-certs:
+  maxmind-data:
+
+services:
+  # Enhanced Dashboard Backend with OTLP support
+  backend:
+    build: ./backend
+    container_name: ${BACKEND_CONTAINER_NAME:-traefik-dashboard-backend-otlp}
+    restart: unless-stopped
+    networks:
+      - dashboard-network
+    ports:
+      - "3001:3001"   # API port
+      - "4317:4317"   # OTLP GRPC port
+      - "4318:4318"   # OTLP HTTP port
+    volumes:
+      - ${TRAEFIK_LOG_PATH:-./logs}:/logs:ro
+      - maxmind-data:/maxmind:ro
+    environment:
+      # Basic configuration
+      - PORT=3001
+      - TRAEFIK_LOG_FILE=/logs/access.log
+      
+      # MaxMind GeoIP configuration
+      - USE_MAXMIND=${USE_MAXMIND:-true}
+      - MAXMIND_DB_PATH=/maxmind/GeoLite2-City.mmdb
+      - MAXMIND_FALLBACK_ONLINE=${MAXMIND_FALLBACK_ONLINE:-true}
+      
+      # OTLP Configuration
+      - OTLP_ENABLED=${OTLP_ENABLED:-true}
+      - OTLP_GRPC_PORT=${OTLP_GRPC_PORT:-4317}
+      - OTLP_HTTP_PORT=${OTLP_HTTP_PORT:-4318}
+      
+      # Performance tuning
+      - GOGC=${GOGC:-50}
+      - GOMEMLIMIT=${GOMEMLIMIT:-500MiB}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.2'
+          memory: 128M
+
+  # Dashboard Frontend
+  frontend:
+    build: ./frontend
+    container_name: ${FRONTEND_CONTAINER_NAME:-traefik-dashboard-frontend-otlp}
+    restart: unless-stopped
+    networks:
+      - dashboard-network
+      - traefik-network
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    environment:
+      - BACKEND_SERVICE=${BACKEND_SERVICE_NAME:-backend}
+      - BACKEND_PORT=${PORT:-3001}
+    depends_on:
+      - backend
+    labels:
+      # Traefik labels for routing (optional)
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
+      - "traefik.http.routers.dashboard-frontend.rule=Host(`dashboard.localhost`) || Host(`dashboard.example.com`)"
+      - "traefik.http.routers.dashboard-frontend.entrypoints=websecure"
+      - "traefik.http.services.dashboard-frontend.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # Sample application to generate OTLP traces (optional)
+  sample-app:
+    image: nginx:alpine
+    container_name: sample-app-for-tracing
+    restart: unless-stopped
+    networks:
+      - traefik-network
+    volumes:
+      - ./sample-app-content:/usr/share/nginx/html:ro
+    profiles:
+      - testing
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-network"
+      - "traefik.http.routers.sample-app.rule=Host(`app.localhost`) || Host(`sample.example.com`)"
+      - "traefik.http.routers.sample-app.entrypoints=web"
+      - "traefik.http.services.sample-app.loadbalancer.server.port=80"
+      # Enable rate limiting for trace generation
+      - "traefik.http.routers.sample-app.middlewares=sample-rate-limit"
+      - "traefik.http.middlewares.sample-rate-limit.ratelimit.average=10"
+      - "traefik.http.middlewares.sample-rate-limit.ratelimit.burst=20"
+
+  # MaxMind GeoLite2 database updater
+  maxmind-updater:
+    image: alpine:latest
+    container_name: maxmind-db-updater
+    restart: "no"
+    volumes:
+      - maxmind-data:/data
+    environment:
+      - MAXMIND_LICENSE_KEY=${MAXMIND_LICENSE_KEY:-your-license-key-here}
+    command: >
+      sh -c "
+        apk add --no-cache wget tar &&
+        cd /data &&
+        if [ ! -f GeoLite2-City.mmdb ] || [ $$(find . -name 'GeoLite2-City.mmdb' -mtime +7) ]; then
+          echo 'Downloading/updating MaxMind GeoLite2-City database...' &&
+          wget -O GeoLite2-City.tar.gz 'https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=$$MAXMIND_LICENSE_KEY&suffix=tar.gz' &&
+          tar -xzf GeoLite2-City.tar.gz --strip-components=1 '*/GeoLite2-City.mmdb' &&
+          rm -f GeoLite2-City.tar.gz &&
+          echo 'MaxMind database updated successfully'
+        else
+          echo 'MaxMind database is up to date'
+        fi
+      "
+
+  # Log generator for testing (optional)
+  traffic-generator:
+    image: alpine:latest
+    container_name: traffic-generator
+    restart: "no"
+    networks:
+      - traefik-network
+    profiles:
+      - testing
+    command: >
+      sh -c "
+        apk add --no-cache curl &&
+        echo 'Generating test traffic...' &&
+        for i in $$(seq 1 100); do
+          curl -s -H 'User-Agent: TrafficGenerator/1.0' 'http://sample-app/' > /dev/null &&
+          curl -s -H 'User-Agent: DashboardTest/1.0' 'http://frontend/' > /dev/null &&
+          sleep 2
+        done &&
+        echo 'Traffic generation completed'
+      "
+    depends_on:
+      - sample-app
+      - frontend
