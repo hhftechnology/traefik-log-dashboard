@@ -155,8 +155,10 @@ The platform supports a **multi-agent architecture** where you can deploy multip
 1. **Create directory structure:**
 
 ```bash
-mkdir -p traefik-dashboard/{data/{logs,geoip,positions,dashboard}}
+mkdir -p traefik-dashboard/data/{logs,geoip,positions,dashboard}
 cd traefik-dashboard
+chmod 755 data/geoip data/positions data/dashboard
+chown -R 1001:1001 ./data/dashboard
 ```
 
 2. **Create `docker-compose.yml`:**
