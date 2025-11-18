@@ -102,7 +102,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50">
+      <div className="min-h-screen bg-background">
         <Header
           title="TRAEFIK LOG DASHBOARD"
           connected={false}
@@ -110,8 +110,8 @@ export default function DashboardPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Connecting to agent...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Connecting to agent...</p>
             </div>
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function DashboardPage() {
 
   if (error && !connected) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50">
+      <div className="min-h-screen bg-background">
         <Header
           title="TRAEFIK LOG DASHBOARD"
           connected={false}
@@ -129,12 +129,12 @@ export default function DashboardPage() {
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <div className="text-red-600 text-6xl mb-4">⚠</div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              <div className="text-destructive text-6xl mb-4">⚠</div>
+              <h2 className="text-2xl font-bold text-foreground mb-2">
                 Connection Error
               </h2>
-              <p className="text-gray-600 mb-4">{error}</p>
-              <p className="text-sm text-gray-500">
+              <p className="text-muted-foreground mb-4">{error}</p>
+              <p className="text-sm text-muted-foreground/80">
                 Make sure the agent is running and accessible
               </p>
             </div>
@@ -145,17 +145,17 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50">
+    <div className="min-h-screen bg-background">
       <Header
         title="TRAEFIK LOG DASHBOARD"
         connected={connected}
         lastUpdate={lastUpdate}
       />
-      
-      <div className="bg-white border-b border-red-200 px-4 py-3">
-        <div className="container mx-auto flex items-center justify-between text-sm text-gray-600">
+
+      <div className="bg-card border-b border-border px-4 py-3">
+        <div className="container mx-auto flex items-center justify-between text-sm text-muted-foreground">
           <div>
-            Showing <span className="font-semibold text-red-600">{logs.length}</span> logs
+            Showing <span className="font-semibold text-primary">{logs.length}</span> logs
           </div>
           <div className="flex items-center gap-4">
             {lastUpdate && (
@@ -182,12 +182,12 @@ export default function DashboardPage() {
             <span className="flex items-center gap-1.5">
               {isPaused ? (
                 <>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                  <div className="w-2 h-2 bg-muted rounded-full"></div>
                   Auto-refresh paused
                 </>
               ) : (
                 <>
-                  <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
                   Auto-refreshing every 5s
                 </>
               )}
@@ -196,7 +196,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <DashboardWithFilters logs={logs} demoMode={false} /> 
+      <DashboardWithFilters logs={logs} demoMode={false} />
     </div>
   );
 }

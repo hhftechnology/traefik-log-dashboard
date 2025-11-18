@@ -14,8 +14,8 @@ export default function StatusCodesCard({ metrics }: Props) {
 
   if (total === 0) {
     return (
-      <Card title="Status Codes" icon={<Activity className="w-5 h-5 text-red-600" />}>
-        <div className="flex items-center justify-center py-8 text-sm text-gray-500">
+      <Card title="Status Codes" icon={<Activity className="w-5 h-5 text-primary" />}>
+        <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
           No status code data available
         </div>
       </Card>
@@ -55,14 +55,14 @@ export default function StatusCodesCard({ metrics }: Props) {
       label: 'Server Error',
       count: metrics.status5xx,
       percentage: (metrics.status5xx / total) * 100,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100',
-      borderColor: 'border-red-300'
+      color: 'text-primary',
+      bgColor: 'bg-primary/10',
+      borderColor: 'border-border'
     }
   ];
 
   return (
-    <Card title="Status Codes" icon={<Activity className="w-5 h-5 text-red-600" />}>
+    <Card title="Status Codes" icon={<Activity className="w-5 h-5 text-primary" />}>
       <div className="grid grid-cols-2 gap-4">
         {statusData.map((status, idx) => (
           <div
@@ -75,20 +75,20 @@ export default function StatusCodesCard({ metrics }: Props) {
                 {status.percentage.toFixed(1)}%
               </span>
             </div>
-            <div className="text-xs text-gray-600 mb-1">{status.label}</div>
+            <div className="text-xs text-muted-foreground mb-1">{status.label}</div>
             <div className={`text-lg font-semibold ${status.color}`}>
               {formatNumber(status.count)}
             </div>
           </div>
         ))}
       </div>
-      <div className="mt-4 pt-4 border-t border-red-100 flex items-center justify-between">
-        <span className="text-sm text-gray-600">Total Requests</span>
-        <span className="text-lg font-bold text-gray-900">{formatNumber(total)}</span>
+      <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">Total Requests</span>
+        <span className="text-lg font-bold text-foreground">{formatNumber(total)}</span>
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-sm text-gray-600">Error Rate</span>
-        <span className={`text-lg font-bold ${metrics.errorRate > 5 ? 'text-red-600' : 'text-green-600'}`}>
+        <span className="text-sm text-muted-foreground">Error Rate</span>
+        <span className={`text-lg font-bold ${metrics.errorRate > 5 ? 'text-primary' : 'text-green-600'}`}>
           {metrics.errorRate.toFixed(2)}%
         </span>
       </div>

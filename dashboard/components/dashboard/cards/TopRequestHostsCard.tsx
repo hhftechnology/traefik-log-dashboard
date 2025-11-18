@@ -16,8 +16,8 @@ interface Props {
 export default function TopRequestHostsCard({ hosts }: Props) {
   if (!hosts || hosts.length === 0) {
     return (
-      <Card title="Top Request Hosts" icon={<Globe className="w-5 h-5 text-red-600" />}>
-        <div className="flex items-center justify-center py-8 text-sm text-gray-500">
+      <Card title="Top Request Hosts" icon={<Globe className="w-5 h-5 text-primary" />}>
+        <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
           No request host data available
         </div>
       </Card>
@@ -28,21 +28,21 @@ export default function TopRequestHostsCard({ hosts }: Props) {
   const topHosts = hosts.slice(0, 10);
 
   return (
-    <Card title="Top Request Hosts" icon={<Globe className="w-5 h-5 text-red-600" />}>
+    <Card title="Top Request Hosts" icon={<Globe className="w-5 h-5 text-primary" />}>
       <div className="space-y-3">
         {topHosts.map((host, idx) => (
           <div key={idx} className="space-y-1.5">
             <div className="flex items-center justify-between text-sm">
-              <span className="font-medium truncate flex-1 text-gray-900" title={host.host}>
+              <span className="font-medium truncate flex-1 text-foreground" title={host.host}>
                 {host.host}
               </span>
-              <span className="text-xs text-gray-500 font-medium ml-2">
+              <span className="text-xs text-muted-foreground font-medium ml-2">
                 {formatNumber(host.count)}
               </span>
             </div>
-            <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-1.5 w-full bg-accent rounded-full overflow-hidden">
               <div
-                className="h-full bg-red-500 transition-all duration-500 ease-out"
+                className="h-full bg-primary transition-all duration-500 ease-out"
                 style={{ width: `${(host.count / maxCount) * 100}%` }}
               />
             </div>

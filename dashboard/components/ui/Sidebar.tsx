@@ -43,14 +43,14 @@ export default function Sidebar({ className }: SidebarProps) {
 			{/* Sidebar */}
 			<aside
 				className={cn(
-					'fixed top-0 left-0 z-40 h-screen w-64 bg-white dark:bg-black border-r border-gray-200 dark:border-white/10 transition-transform',
+					'fixed top-0 left-0 z-40 h-screen w-64 bg-white dark:bg-black border-r border-border transition-transform',
 					isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
 					className
 				)}
 			>
 				<div className="flex flex-col h-full">
 					{/* Logo */}
-					<div className="flex items-center gap-3 p-6 border-b border-gray-200 dark:border-white/10">
+					<div className="flex items-center gap-3 p-6 border-b border-border">
 						<Activity className="w-8 h-8 text-black dark:text-white" />
 						<div>
 							<h2 className="text-lg font-bold text-gray-900 dark:text-white">Traefik Log Dashboard</h2>
@@ -84,7 +84,7 @@ export default function Sidebar({ className }: SidebarProps) {
 					</nav>
 
 					{/* Footer */}
-					<div className="p-4 border-t border-gray-200 dark:border-gray-700">
+					<div className="p-4 border-t border-border">
 						<div className="text-xs text-muted-foreground text-center">
 							<p>© 2025 TRAEFIK LOG DASHBOARD</p>
 							<p className="mt-1">MIT License</p>

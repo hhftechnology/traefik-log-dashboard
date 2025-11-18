@@ -109,22 +109,22 @@ export default function AgentSettingsPage() {
   const environmentAgentsCount = agents.filter(isEnvironmentAgent).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-accent p-6">
       {/* Header */}
       <div className="max-w-7xl mx-auto mb-8">
         <div className="flex items-center gap-3 mb-6">
           <Link
             href="/dashboard"
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-accent rounded-lg transition-colors"
           >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
+            <ChevronLeft className="w-5 h-5 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
               <SettingsIcon className="w-8 h-8 text-red-600" />
               Agent Management
             </h1>
-            <p className="text-gray-600 mt-1">
+            <p className="text-muted-foreground mt-1">
               Configure and monitor your Traefik log agents
             </p>
           </div>
@@ -152,13 +152,13 @@ export default function AgentSettingsPage() {
         )}
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 mb-6 border-b border-gray-200">
+        <div className="flex items-center gap-2 mb-6 border-b border-border">
           <button
             onClick={() => setActiveTab('agents')}
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'agents'
-                ? 'text-red-600 border-b-2 border-red-600'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'text-primary border-b-2 border-primary'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -170,8 +170,8 @@ export default function AgentSettingsPage() {
             onClick={() => setActiveTab('health')}
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'health'
-                ? 'text-red-600 border-b-2 border-red-600'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'text-primary border-b-2 border-primary'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -183,8 +183,8 @@ export default function AgentSettingsPage() {
             onClick={() => setActiveTab('bulk')}
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'bulk'
-                ? 'text-red-600 border-b-2 border-red-600'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'text-primary border-b-2 border-primary'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Bulk Operations
@@ -223,12 +223,12 @@ export default function AgentSettingsPage() {
             {/* Agent Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {agents.length === 0 ? (
-                <div className="col-span-2 bg-white border border-gray-200 rounded-lg p-12 text-center">
-                  <Server className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                <div className="col-span-2 bg-card border border-border rounded-lg p-12 text-center">
+                  <Server className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
                     No Agents Configured
                   </h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-muted-foreground mb-6">
                     Add your first agent to start monitoring Traefik logs
                   </p>
                   <Button
@@ -247,17 +247,17 @@ export default function AgentSettingsPage() {
                   return (
                     <div
                       key={agent.id}
-                      className={`bg-white border rounded-lg p-6 shadow-sm transition-all ${
+                      className={`bg-card border rounded-lg p-6 shadow-sm transition-all ${
                         isSelected
-                          ? 'border-red-500 ring-2 ring-red-200'
-                          : 'border-gray-200 hover:border-red-300'
+                          ? 'border-primary ring-2 ring-primary/20'
+                          : 'border-border hover:border-primary/50'
                       }`}
                     >
                       {/* Header */}
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-lg font-semibold text-gray-900">
+                            <h3 className="text-lg font-semibold text-foreground">
                               {agent.name}
                             </h3>
                             {/* FIXED: Added visual indicator for environment agents */}
@@ -273,16 +273,16 @@ export default function AgentSettingsPage() {
                               </Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             {getLocationIcon(agent.location)}
                             <span className="capitalize">{agent.location}</span>
-                            <span className="text-gray-400">•</span>
+                            <span className="text-border">•</span>
                             <span>Agent #{agent.number}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           {getStatusIcon(agent.status)}
-                          <span className="text-sm font-medium text-gray-700 capitalize">
+                          <span className="text-sm font-medium text-foreground capitalize">
                             {agent.status || 'unknown'}
                           </span>
                         </div>
@@ -291,18 +291,18 @@ export default function AgentSettingsPage() {
                       {/* Details */}
                       <div className="space-y-2 mb-4">
                         <div className="text-sm">
-                          <span className="text-gray-600">URL:</span>
-                          <code className="ml-2 bg-gray-100 px-2 py-1 rounded text-xs">
+                          <span className="text-muted-foreground">URL:</span>
+                          <code className="ml-2 bg-accent px-2 py-1 rounded text-xs">
                             {agent.url}
                           </code>
                         </div>
                         {agent.description && (
-                          <div className="text-sm text-gray-600">
+                          <div className="text-sm text-muted-foreground">
                             {agent.description}
                           </div>
                         )}
                         {agent.lastSeen && (
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-muted-foreground">
                             Last seen:{' '}
                             {new Date(agent.lastSeen).toLocaleString()}
                           </div>
@@ -316,7 +316,7 @@ export default function AgentSettingsPage() {
                           variant="outline"
                           size="sm"
                           disabled={checkingStatus[agent.id]}
-                          className="border-red-300 text-red-700 hover:bg-red-50"
+                          className="border-border text-primary hover:bg-accent"
                         >
                           <RefreshCw
                             className={`w-4 h-4 ${checkingStatus[agent.id] ? 'animate-spin' : ''}`}
@@ -330,7 +330,7 @@ export default function AgentSettingsPage() {
                           }}
                           variant="outline"
                           size="sm"
-                          className="border-red-300 text-red-700 hover:bg-red-50"
+                          className="border-border text-primary hover:bg-accent"
                         >
                           <Edit className="w-4 h-4" />
                         </Button>
@@ -343,8 +343,8 @@ export default function AgentSettingsPage() {
                           disabled={isEnvAgent}
                           className={`${
                             isEnvAgent
-                              ? 'border-gray-300 text-gray-400 cursor-not-allowed'
-                              : 'border-red-300 text-red-600 hover:bg-red-50'
+                              ? 'border-border text-muted-foreground cursor-not-allowed'
+                              : 'border-border text-primary hover:bg-accent'
                           }`}
                           title={
                             isEnvAgent
@@ -366,11 +366,11 @@ export default function AgentSettingsPage() {
             </div>
 
             {/* Setup Guide */}
-            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-              <h4 className="font-semibold text-red-900 mb-3">
+            <div className="bg-primary/10 border border-border rounded-lg p-6">
+              <h4 className="font-semibold text-foreground mb-3">
                 Quick Setup Guide
               </h4>
-              <ul className="text-sm text-red-800 space-y-2 list-disc list-inside">
+              <ul className="text-sm text-foreground space-y-2 list-disc list-inside">
                 <li>Deploy agents on servers where Traefik logs are located</li>
                 <li>Configure unique authentication tokens for secure communication</li>
                 <li>On-site agents: Running on the same network as the dashboard</li>
@@ -391,7 +391,7 @@ export default function AgentSettingsPage() {
         )}
 
         {activeTab === 'bulk' && (
-          <div className="bg-white border border-red-200 rounded-lg p-6 shadow-sm">
+          <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
             <AgentBulkOperations />
           </div>
         )}

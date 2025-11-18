@@ -14,8 +14,8 @@ export default function StatusCodeDistributionCard({ metrics }: Props) {
 
   if (total === 0) {
     return (
-      <Card title="Status Code Distribution" icon={<BarChart3 className="w-5 h-5 text-red-600" />}>
-        <div className="flex items-center justify-center py-8 text-sm text-gray-500">
+      <Card title="Status Code Distribution" icon={<BarChart3 className="w-5 h-5 text-primary" />}>
+        <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
           No status code data available
         </div>
       </Card>
@@ -48,25 +48,25 @@ export default function StatusCodeDistributionCard({ metrics }: Props) {
       label: '5xx Server Error',
       count: metrics.status5xx,
       percentage: (metrics.status5xx / total) * 100,
-      color: 'bg-red-500',
-      textColor: 'text-red-700'
+      color: 'bg-primary',
+      textColor: 'text-primary'
     }
   ];
 
   return (
-    <Card title="Status Code Distribution" icon={<BarChart3 className="w-5 h-5 text-red-600" />}>
+    <Card title="Status Code Distribution" icon={<BarChart3 className="w-5 h-5 text-primary" />}>
       <div className="space-y-4">
         {codes.map((code, idx) => (
           <div key={idx} className="space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="font-medium text-gray-900">{code.label}</span>
-              <div className="flex items-center gap-3 text-xs text-gray-500">
+              <span className="font-medium text-foreground">{code.label}</span>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 <span className="font-medium">{formatNumber(code.count)}</span>
-                <span className="text-gray-400">•</span>
+                <span className="text-muted-foreground">•</span>
                 <span className={`font-semibold ${code.textColor}`}>{code.percentage.toFixed(1)}%</span>
               </div>
             </div>
-            <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-2 w-full bg-accent rounded-full overflow-hidden">
               <div
                 className={`h-full ${code.color} transition-all duration-500 ease-out`}
                 style={{ width: `${code.percentage}%` }}

@@ -7,6 +7,7 @@ import { Button } from './button';
 import { Badge } from './badge';
 import AgentSelector from './AgentSelector';
 import { useAgents } from '@/lib/contexts/AgentContext';
+import { ThemeToggle } from './ThemeToggle';
 
 
 interface HeaderProps {
@@ -27,16 +28,16 @@ export default function Header({
   const { selectedAgent } = useAgents();
 
   return (
-    <header className="bg-white border-b border-red-200 sticky top-0 z-50 shadow-sm">
+    <header className="bg-background border-b border-border sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between gap-4">
           {/* Left Section: Logo and Title */}
           <div className="flex items-center gap-3 min-w-0">
-            <Activity className="w-8 h-8 text-red-600 flex-shrink-0" />
+            <Activity className="w-8 h-8 text-primary flex-shrink-0" />
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-gray-900 truncate">{title}</h1>
+              <h1 className="text-xl font-bold text-foreground truncate">{title}</h1>
               {demoMode && (
-                <Badge variant="secondary" className="mt-0.5 bg-red-100 text-red-700 border-red-300">
+                <Badge variant="secondary" className="mt-0.5 bg-primary/10 text-primary border-primary/30">
                   Demo Mode - Simulated Data
                 </Badge>
               )}
@@ -55,13 +56,13 @@ export default function Header({
             {/* Connection Status */}
             {!demoMode && connected !== undefined && (
               <div className="hidden md:flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                <span className="text-sm text-gray-600">
+                <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-destructive'}`} />
+                <span className="text-sm text-muted-foreground">
                   {connected ? (
                     <>
                       Connected
                       {selectedAgent && (
-                        <span className="ml-1 text-xs text-gray-500">
+                        <span className="ml-1 text-xs text-muted-foreground/80">
                           (Agent #{selectedAgent.number})
                         </span>
                       )}
@@ -75,17 +76,20 @@ export default function Header({
 
             {/* Last Update */}
             {lastUpdate && (
-              <div className="hidden xl:block text-xs text-gray-500">
+              <div className="hidden xl:block text-xs text-muted-foreground">
                 Last update: {lastUpdate.toLocaleTimeString()}
               </div>
             )}
+
+            {/* Theme Toggle */}
+            <ThemeToggle />
 
             {/* Action Links */}
             <a
               href="https://github.com/hhftechnology/traefik-log-dashboard"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors"
               title="GitHub Repository"
             >
               <Github className="w-5 h-5" />
@@ -96,7 +100,7 @@ export default function Header({
               href="https://discord.gg/xCtMFeUKf9"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-3 py-2 text-foreground hover:text-primary hover:bg-accent rounded-lg transition-colors"
               title="Join Discord"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
@@ -105,7 +109,7 @@ export default function Header({
               <span className="text-sm font-medium hidden sm:inline">Discord</span>
             </a>
 
-            <Button asChild variant="secondary" className="border-red-300 text-red-700 hover:bg-red-50">
+            <Button asChild variant="secondary" className="border-border text-foreground hover:bg-accent">
               <Link href="/" className="flex items-center gap-2">
                 <Home className="w-4 h-4" />
                 <span className="hidden sm:inline">Home</span>
@@ -118,7 +122,7 @@ export default function Header({
                 asChild
                 variant="secondary"
                 size="icon"
-                className="border-red-300 text-red-700 hover:bg-red-50"
+                className="border-border text-foreground hover:bg-accent"
                 title="Log Filters"
               >
                 <Link href="/settings/filters">
@@ -133,7 +137,7 @@ export default function Header({
                 asChild
                 variant="secondary"
                 size="icon"
-                className="border-red-300 text-red-700 hover:bg-red-50"
+                className="border-border text-foreground hover:bg-accent"
                 title="Agent Settings"
               >
                 <Link href="/settings/agents">

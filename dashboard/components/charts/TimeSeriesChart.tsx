@@ -14,8 +14,14 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { TimeSeriesPoint } from '@/lib/types';
+import { useTheme } from '@/lib/contexts/ThemeContext';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
+
+const getCSSVariable = (variable: string): string => {
+  if (typeof window === 'undefined') return '';
+  return getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
+};
 
 interface TimeSeriesChartProps {
   data: TimeSeriesPoint[];
@@ -23,6 +29,7 @@ interface TimeSeriesChartProps {
 
 export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
   const chartRef = useRef<ChartJS<'line'>>(null);
+  const { resolvedTheme } = useTheme();
 
   const labels = data.map(point => {
     const date = new Date(point.timestamp);
@@ -31,14 +38,22 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
 
   const values = data.map(point => point.value);
 
+  const primaryColor = `oklch(${getCSSVariable('--primary')})`;
+  const primaryColorWithAlpha = `oklch(${getCSSVariable('--primary')} / 0.1)`;
+  const textColor = `oklch(${getCSSVariable('--muted-foreground')})`;
+  const gridColor = `oklch(${getCSSVariable('--border')})`;
+  const tooltipBg = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.8)';
+  const tooltipTextColor = resolvedTheme === 'dark' ? '#000' : '#fff';
+  const tooltipBorder = resolvedTheme === 'dark' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)';
+
   const chartData = {
     labels,
     datasets: [
       {
         label: 'Requests',
         data: values,
-        borderColor: 'rgb(220, 38, 38)',
-        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+        borderColor: primaryColor,
+        backgroundColor: primaryColorWithAlpha,
         fill: true,
         tension: 0.4,
         pointRadius: 0,
@@ -56,23 +71,30 @@ export default function TimeSeriesChart({ data }: TimeSeriesChartProps) {
       tooltip: {
         mode: 'index' as const,
         intersect: false,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backgroundColor: tooltipBg,
         padding: 12,
-        titleColor: '#fff',
-        bodyColor: '#fff',
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        titleColor: tooltipTextColor,
+        bodyColor: tooltipTextColor,
+        borderColor: tooltipBorder,
         borderWidth: 1,
       },
     },
     scales: {
       x: {
         grid: { display: false },
-        ticks: { maxRotation: 0, autoSkipPadding: 20, color: '#6b7280' },
+        ticks: {
+          maxRotation: 0,
+          autoSkipPadding: 20,
+          color: textColor,
+        },
       },
       y: {
         beginAtZero: true,
-        grid: { color: 'rgba(0, 0, 0, 0.05)' },
-        ticks: { precision: 0, color: '#6b7280' },
+        grid: { color: gridColor },
+        ticks: {
+          precision: 0,
+          color: textColor,
+        },
       },
     },
     interaction: { mode: 'nearest' as const, axis: 'x' as const, intersect: false },

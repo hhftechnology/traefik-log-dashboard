@@ -9,8 +9,14 @@ import {
 } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
 import type { TooltipItem } from 'chart.js';
+import { useTheme } from '@/lib/contexts/ThemeContext';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
+
+const getCSSVariable = (variable: string): string => {
+  if (typeof window === 'undefined') return '';
+  return getComputedStyle(document.documentElement).getPropertyValue(variable).trim();
+};
 
 interface PieChartProps {
   labels: string[];
@@ -19,34 +25,42 @@ interface PieChartProps {
   height?: number;
 }
 
-export default function PieChart({ 
-  labels, 
-  data, 
-  backgroundColor = [
-    'rgba(0,0,0,0.85)',
-    'rgba(0,0,0,0.65)',
-    'rgba(0,0,0,0.45)',
-    'rgba(0,0,0,0.25)',
-    'rgba(0,0,0,0.15)',
-    'rgba(0,0,0,0.05)'
-  ],
-  height = 300 
+export default function PieChart({
+  labels,
+  data,
+  backgroundColor,
+  height = 300
 }: PieChartProps) {
   const chartRef = useRef<ChartJS<'pie'>>(null);
+  const { resolvedTheme } = useTheme();
+
+  // Generate default colors from CSS variables if not provided
+  const defaultColors = [
+    `oklch(${getCSSVariable('--chart-1')})`,
+    `oklch(${getCSSVariable('--chart-2')})`,
+    `oklch(${getCSSVariable('--chart-3')})`,
+    `oklch(${getCSSVariable('--chart-4')})`,
+    `oklch(${getCSSVariable('--chart-5')})`,
+    `oklch(${getCSSVariable('--primary')})`,
+  ];
+
+  const colors = backgroundColor || defaultColors;
+  const textColor = `oklch(${getCSSVariable('--muted-foreground')})`;
+  const tooltipBg = resolvedTheme === 'dark' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(0, 0, 0, 0.8)';
+  const tooltipTextColor = resolvedTheme === 'dark' ? '#000' : '#fff';
+  const tooltipBorder = resolvedTheme === 'dark' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(255, 255, 255, 0.1)';
 
   const chartData = {
     labels,
     datasets: [
       {
         data,
-        backgroundColor,
-        borderColor: backgroundColor.map(color => color.replace(/0\.[0-9]+\)/, '1)')),
+        backgroundColor: colors,
+        borderColor: colors,
         borderWidth: 2,
       },
     ],
   };
-
-  const tooltipBg = 'rgba(0, 0, 0, 0.8)';
 
   const options = {
     responsive: true,
@@ -58,14 +72,15 @@ export default function PieChart({
           padding: 15,
           usePointStyle: true,
           pointStyle: 'circle',
+          color: textColor,
         },
       },
       tooltip: {
         backgroundColor: tooltipBg,
         padding: 12,
-        titleColor: '#fff',
-        bodyColor: '#fff',
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        titleColor: tooltipTextColor,
+        bodyColor: tooltipTextColor,
+        borderColor: tooltipBorder,
         borderWidth: 1,
         callbacks: {
           label: function(context: any) {

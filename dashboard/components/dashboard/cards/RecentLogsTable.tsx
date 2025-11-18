@@ -100,9 +100,9 @@ export default function RecentLogsTable({ logs }: Props) {
       case 'StartUTC':
       case 'StartLocal':
         try {
-          return <span className="text-xs text-gray-900">{new Date(value as string).toLocaleTimeString()}</span>;
+          return <span className="text-xs text-foreground">{new Date(value as string).toLocaleTimeString()}</span>;
         } catch {
-          return <span className="text-xs text-gray-900">{String(value || 'N/A')}</span>;
+          return <span className="text-xs text-foreground">{String(value || 'N/A')}</span>;
         }
       
       case 'DownstreamStatus':
@@ -111,35 +111,35 @@ export default function RecentLogsTable({ logs }: Props) {
       case 'Duration':
       case 'OriginDuration':
       case 'Overhead':
-        return <span className="font-mono text-xs text-gray-900">{formatDuration(value as number)}</span>;
-      
+        return <span className="font-mono text-xs text-foreground">{formatDuration(value as number)}</span>;
+
       case 'DownstreamContentSize':
       case 'RequestContentSize':
-        return <span className="font-mono text-xs text-gray-900">{formatBytes(value as number)}</span>;
-      
+        return <span className="font-mono text-xs text-foreground">{formatBytes(value as number)}</span>;
+
       case 'ClientHost':
       case 'RequestAddr':
-        return <span className="font-mono text-xs text-gray-900">{value || 'N/A'}</span>;
+        return <span className="font-mono text-xs text-foreground">{value || 'N/A'}</span>;
       
       case 'RequestMethod':
         return <span className={`font-bold text-xs uppercase ${getMethodColor(value as string)}`}>{value}</span>;
       
       case 'RequestPath':
-        return <span className="font-mono text-xs truncate max-w-md block text-gray-900" title={value as string}>{value || '/'}</span>;
-      
+        return <span className="font-mono text-xs truncate max-w-md block text-foreground" title={value as string}>{value || '/'}</span>;
+
       case 'ServiceName':
       case 'RouterName':
-        return <span className="text-xs truncate block text-gray-900" title={value as string}>{value || 'N/A'}</span>;
-      
+        return <span className="text-xs truncate block text-foreground" title={value as string}>{value || 'N/A'}</span>;
+
       default:
-        return <span className="text-xs truncate block text-gray-900">{String(value || 'N/A')}</span>;
+        return <span className="text-xs truncate block text-foreground">{String(value || 'N/A')}</span>;
     }
   };
 
   if (!logs || logs.length === 0) {
     return (
-      <Card title="Recent Logs" icon={<List className="w-5 h-5 text-red-600" />}>
-        <div className="flex items-center justify-center py-12 text-sm text-gray-500">
+      <Card title="Recent Logs" icon={<List className="w-5 h-5 text-primary" />}>
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           No logs available
         </div>
       </Card>
@@ -152,23 +152,23 @@ export default function RecentLogsTable({ logs }: Props) {
       icon={
         <div className="relative">
           <details className="relative">
-            <summary className="flex items-center gap-1 cursor-pointer text-xs font-medium bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-md transition-colors list-none">
-              <span className="text-red-700">Additional Columns</span>
-              <ChevronDown className="w-3.5 h-3.5 text-red-600" />
+            <summary className="flex items-center gap-1 cursor-pointer text-xs font-medium bg-accent hover:bg-accent px-3 py-1.5 rounded-md transition-colors list-none">
+              <span className="text-primary">Additional Columns</span>
+              <ChevronDown className="w-3.5 h-3.5 text-primary" />
             </summary>
-            <div className="absolute right-0 mt-2 w-56 bg-white border border-red-200 rounded-lg shadow-lg z-50 p-2 space-y-1 max-h-80 overflow-y-auto">
+            <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg z-50 p-2 space-y-1 max-h-80 overflow-y-auto">
               {optionalColumns.map(col => (
                 <label
                   key={col.id}
-                  className="flex items-center gap-2 text-sm px-2 py-1.5 hover:bg-red-50 rounded-md cursor-pointer"
+                  className="flex items-center gap-2 text-sm px-2 py-1.5 hover:bg-accent rounded-md cursor-pointer"
                 >
                   <input
                     type="checkbox"
                     checked={visibleOptionalColumns.has(col.id)}
                     onChange={() => toggleColumn(col.id)}
-                    className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
                   />
-                  <span className="text-gray-700">{col.header}</span>
+                  <span className="text-foreground">{col.header}</span>
                 </label>
               ))}
             </div>
@@ -179,11 +179,11 @@ export default function RecentLogsTable({ logs }: Props) {
       <div className="w-full overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b-2 border-red-200">
+            <tr className="border-b-2 border-border">
               {visibleColumns.map(col => (
                 <th
                   key={col.id}
-                  className={`text-left py-3 px-3 text-xs font-bold uppercase tracking-wider text-gray-700 bg-red-50/50 ${(col as any).width || ''}`}
+                  className={`text-left py-3 px-3 text-xs font-bold uppercase tracking-wider text-foreground bg-accent ${(col as any).width || ''}`}
                 >
                   {col.header}
                 </th>
@@ -194,7 +194,7 @@ export default function RecentLogsTable({ logs }: Props) {
             {sortedLogs.slice(0, 100).map((log, idx) => (
               <tr
                 key={`${log.StartUTC}-${idx}`}
-                className="border-b border-red-100 hover:bg-red-50/30 transition-colors"
+                className="border-b border-border hover:bg-accent transition-colors"
               >
                 {visibleColumns.map(col => (
                   <td
@@ -210,13 +210,13 @@ export default function RecentLogsTable({ logs }: Props) {
         </table>
       </div>
       
-      <div className="mt-4 pt-4 border-t border-red-100 flex items-center justify-between text-xs text-gray-500">
+      <div className="mt-4 pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          Showing {Math.min(100, sortedLogs.length)} of {sortedLogs.length} logs 
+          Showing {Math.min(100, sortedLogs.length)} of {sortedLogs.length} logs
           {sortedLogs.length === 1000 && ' (max 1000)'}
         </span>
         <span className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 bg-red-600 rounded-full animate-pulse"></span>
+          <span className="inline-block w-2 h-2 bg-primary rounded-full animate-pulse"></span>
           Live updates
         </span>
       </div>
