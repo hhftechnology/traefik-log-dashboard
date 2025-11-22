@@ -1,5 +1,6 @@
 <div align="center">
-    <h1 align="center"><a href="https://github.com/hhftechnology/traefik-log-dashboard">Traefik Log Dashboard</a></h1>
+    <img width="350" height="350" alt="Traefik Log Dashboard Logo" src="https://github.com/user-attachments/assets/03bce900-ba37-4890-bd26-9017dfd92474" />
+    <h1 align="center"><a href="https://github.com/hhftechnology/traefik-log-dashboard">Traefik Log Dashboard</a></h1>    
 </div>
 
 A comprehensive analytics platform for Traefik access logs with three deployment options: a Go-based API agent, a modern Next.js web dashboard, and a beautiful terminal-based CLI.
