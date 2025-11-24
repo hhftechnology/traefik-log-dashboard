@@ -62,7 +62,7 @@ export default function FilterSettingsPage() {
 
   const handleAddStatusCode = () => {
     const code = parseInt(newStatusCode);
-    if (!isNaN(code) && code >= 100 && code < 600) {
+    if (!isNaN(code) && ((code >= 100 && code < 600) || code==0)) {
       updateSettings({
         excludeStatusCodes: [...settings.excludeStatusCodes, code],
       });
