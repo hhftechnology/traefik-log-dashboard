@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Save,
   X,
+  Edit2,
 } from 'lucide-react';
 
 export default function FilterSettingsPage() {
@@ -30,6 +31,7 @@ export default function FilterSettingsPage() {
   const [newPath, setNewPath] = useState('');
   const [newCustomHeader, setNewCustomHeader] = useState('');
   const [showCustomConditionForm, setShowCustomConditionForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   // Custom condition form state
@@ -121,17 +123,31 @@ export default function FilterSettingsPage() {
 
   const handleAddCustomCondition = () => {
     if (customCondition.name && customCondition.field && customCondition.value) {
-      addCustomCondition({
-        id: Date.now().toString(),
-        name: customCondition.name,
-        enabled: customCondition.enabled || true,
-        type: customCondition.type || 'custom',
-        field: customCondition.field,
-        operator: customCondition.operator || 'contains',
-        value: customCondition.value,
-        description: customCondition.description,
-        mode: customCondition.mode || 'exclude',
-      } as FilterCondition);
+      if (editingId) {
+        updateCustomCondition(editingId, {
+          name: customCondition.name,
+          enabled: customCondition.enabled,
+          type: customCondition.type || 'custom',
+          field: customCondition.field,
+          operator: customCondition.operator || 'contains',
+          value: customCondition.value,
+          description: customCondition.description,
+          mode: customCondition.mode || 'exclude',
+        });
+        setEditingId(null);
+      } else {
+        addCustomCondition({
+          id: Date.now().toString(),
+          name: customCondition.name,
+          enabled: customCondition.enabled || true,
+          type: customCondition.type || 'custom',
+          field: customCondition.field,
+          operator: customCondition.operator || 'contains',
+          value: customCondition.value,
+          description: customCondition.description,
+          mode: customCondition.mode || 'exclude',
+        } as FilterCondition);
+      }
 
       setCustomCondition({
         name: '',
@@ -146,6 +162,36 @@ export default function FilterSettingsPage() {
       setShowCustomConditionForm(false);
       showSavedIndicator();
     }
+  };
+
+  const handleEditCondition = (condition: FilterCondition) => {
+    setCustomCondition({
+      name: condition.name,
+      type: condition.type,
+      field: condition.field,
+      operator: condition.operator,
+      value: condition.value,
+      enabled: condition.enabled,
+      description: condition.description || '',
+      mode: condition.mode || 'exclude',
+    });
+    setEditingId(condition.id);
+    setShowCustomConditionForm(true);
+  };
+
+  const handleCancelEdit = () => {
+    setCustomCondition({
+      name: '',
+      type: 'custom',
+      field: 'RequestPath',
+      operator: 'contains',
+      value: '',
+      enabled: true,
+      description: '',
+      mode: 'exclude',
+    });
+    setEditingId(null);
+    setShowCustomConditionForm(false);
   };
 
   const showSavedIndicator = () => {
@@ -243,6 +289,21 @@ export default function FilterSettingsPage() {
                     checked={settings.excludePrivateIPs}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => {
                       updateSettings({ excludePrivateIPs: e.target.checked });
+                      showSavedIndicator();
+                    }}
+                    className="w-4 h-4"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                  <span className="text-sm font-medium text-gray-900">
+                    Exclude Unknown Routers/Services
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={settings.excludeUnknownRoutersServices}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                      updateSettings({ excludeUnknownRoutersServices: e.target.checked });
                       showSavedIndicator();
                     }}
                     className="w-4 h-4"
@@ -564,7 +625,20 @@ export default function FilterSettingsPage() {
                   </CardDescription>
                 </div>
                 <Button
-                  onClick={() => setShowCustomConditionForm(!showCustomConditionForm)}
+                  onClick={() => {
+                    setEditingId(null);
+                    setCustomCondition({
+                      name: '',
+                      type: 'custom',
+                      field: 'RequestPath',
+                      operator: 'contains',
+                      value: '',
+                      enabled: true,
+                      description: '',
+                      mode: 'exclude',
+                    });
+                    setShowCustomConditionForm(!showCustomConditionForm);
+                  }}
                   size="sm"
                 >
                   <Plus className="w-4 h-4 mr-2" />
@@ -577,7 +651,7 @@ export default function FilterSettingsPage() {
               {showCustomConditionForm && (
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <h4 className="text-sm font-semibold text-gray-900 mb-4">
-                    New Custom Condition
+                    {editingId ? 'Edit Custom Condition' : 'New Custom Condition'}
                   </h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -675,10 +749,10 @@ export default function FilterSettingsPage() {
                   </div>
                   <div className="flex gap-2 mt-4">
                     <Button onClick={handleAddCustomCondition} size="sm">
-                      Add Condition
+                      {editingId ? 'Save Changes' : 'Add Condition'}
                     </Button>
                     <Button
-                      onClick={() => setShowCustomConditionForm(false)}
+                      onClick={handleCancelEdit}
                       variant="outline"
                       size="sm"
                     >
@@ -737,6 +811,14 @@ export default function FilterSettingsPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
+                          <Button
+                            onClick={() => handleEditCondition(condition)}
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                          >
+                            <Edit2 className="w-4 h-4 text-gray-600" />
+                          </Button>
                           <label className="cursor-pointer">
                             <input
                               type="checkbox"

@@ -1,8 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { agentConfig } from '@/lib/agent-config';
+import maxmind, { Reader } from 'maxmind';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+
+let reader: Reader<any> | null = null;
+
+async function getReader() {
+  if (reader) return reader;
+  
+  try {
+    // Try to locate the database file
+    // In development/production it should be in node_modules
+    const dbPath = path.join(process.cwd(), 'node_modules', 'geolite2-redist', 'dist', 'GeoLite2-City.mmdb');
+    reader = await maxmind.open(dbPath);
+    return reader;
+  } catch (error) {
+    console.error('Failed to open GeoIP database:', error);
+    return null;
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,42 +42,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const AGENT_API_URL = agentConfig.url;
-    const AGENT_API_TOKEN = agentConfig.token;
-
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-
-    if (AGENT_API_TOKEN) {
-      headers['Authorization'] = `Bearer ${AGENT_API_TOKEN}`;
-    }
-
-    const response = await fetch(
-      `${AGENT_API_URL}/api/location/lookup`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ ips }),
-        cache: 'no-store',
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Agent location error:', error);
+    const lookup = await getReader();
+    
+    if (!lookup) {
       return NextResponse.json(
-        { error: `Agent error: ${error}` },
-        { status: response.status }
+        { error: 'GeoIP database not available' },
+        { status: 503 }
       );
     }
 
-    const data = await response.json();
+    const locations = [];
+
+    for (const ip of ips) {
+      try {
+        // Skip private IPs check here as the library handles standard IPs
+        // But we can add a quick check if needed, though the reader just returns null for private/unknown
+        const result = lookup.get(ip);
+
+        if (result && result.country) {
+          locations.push({
+            ipAddress: ip,
+            country: result.country.iso_code,
+            city: result.city?.names?.en,
+            latitude: result.location?.latitude,
+            longitude: result.location?.longitude,
+          });
+        }
+      } catch (e) {
+        // Ignore invalid IPs
+        continue;
+      }
+    }
     
-    const res = NextResponse.json(data);
+    const res = NextResponse.json({ locations });
     res.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.headers.set('Pragma', 'no-cache');
-    res.headers.set('Expires', '0');
     
     return res;
   } catch (error) {

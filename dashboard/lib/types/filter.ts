@@ -23,6 +23,7 @@ export interface FilterSettings {
   excludedIPs: string[];
   excludeUnknownIPs: boolean;
   excludePrivateIPs: boolean;
+  excludeUnknownRoutersServices: boolean;
   proxySettings: ProxySettings;
   customConditions: FilterCondition[];
   excludeStatusCodes: number[];
@@ -34,6 +35,7 @@ export const defaultFilterSettings: FilterSettings = {
   excludedIPs: [],
   excludeUnknownIPs: false,
   excludePrivateIPs: false,
+  excludeUnknownRoutersServices: false,
   proxySettings: {
     enableCFHeaders: true,
     enableXForwardedFor: true,

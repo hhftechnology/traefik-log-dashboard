@@ -1,116 +1,27 @@
 // dashboard/app/dashboard/page.tsx
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+// dashboard/app/dashboard/page.tsx
+'use client';
+
 import DashboardWithFilters from '@/components/dashboard/DashboardWithFilters';
 import Header from '@/components/ui/Header';
-import { TraefikLog } from '@/lib/types';
-import { parseTraefikLogs } from '@/lib/traefik-parser';
-import { enrichLogsWithGeoLocation } from '@/lib/location';
 import { Button } from '@/components/ui/button';
-import { Pause, Play } from 'lucide-react';
+import { Pause, Play, ServerOff } from 'lucide-react';
+import { useLogFetcher } from '@/lib/hooks/useLogFetcher';
 
 export default function DashboardPage() {
-  const [logs, setLogs] = useState<TraefikLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [connected, setConnected] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [isPaused, setIsPaused] = useState(false);
-  const [agentId, setAgentId] = useState<string | null>(null);
-  const [agentName, setAgentName] = useState<string | null>(null);
-
-  const positionRef = useRef<number>(-1);
-  const isFirstFetch = useRef(true);
-
-  // ADDED: Track seen log entries by unique ID to prevent duplicates
-  const seenLogsRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const fetchLogs = async () => {
-      // Don't fetch if paused
-      if (isPaused) return;
-
-      try {
-        const position = positionRef.current ?? -1;
-
-        // FIX: Remove period parameter to use position-based incremental reading only
-        // This prevents conflicts between period filtering and position tracking
-        const response = await fetch(
-          `/api/logs/access?position=${position}&lines=1000`
-        );
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        // Capture agent info on first successful response
-        if (isFirstFetch.current && data.agent) {
-          setAgentId(data.agent.id);
-          setAgentName(data.agent.name);
-        }
-
-        if (data.logs && data.logs.length > 0) {
-          const parsedLogs = parseTraefikLogs(data.logs);
-
-          // FIX: Deduplicate logs using composite unique key
-          // Using StartUTC + RequestCount + RequestPath + ClientHost for uniqueness
-          const newUniqueLogs = parsedLogs.filter(log => {
-            // Create a composite key from multiple fields to ensure uniqueness
-            const logKey = `${log.StartUTC || log.StartLocal}-${log.RequestCount}-${log.RequestPath}-${log.ClientHost}`;
-
-            if (seenLogsRef.current.has(logKey)) {
-              return false; // Skip duplicate
-            }
-
-            seenLogsRef.current.add(logKey);
-            return true;
-          });
-
-          // Only update state if we have new unique logs
-          if (newUniqueLogs.length > 0) {
-            // Enrich logs with geolocation data
-            const enrichedLogs = await enrichLogsWithGeoLocation(newUniqueLogs);
-
-            setLogs((prevLogs: TraefikLog[]) => {
-              if (isFirstFetch.current) {
-                isFirstFetch.current = false;
-                return enrichedLogs;
-              }
-              // Append only new unique logs and keep last 1000
-              return [...prevLogs, ...enrichedLogs].slice(-1000);
-            });
-          }
-        }
-
-        // Update position for next incremental read
-        if (data.positions && data.positions.length > 0 && typeof data.positions[0].Position === 'number') {
-          positionRef.current = data.positions[0].Position;
-        }
-
-        setConnected(true);
-        setError(null);
-        setLastUpdate(new Date());
-      } catch (err) {
-        console.error('Error fetching logs:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch logs');
-        setConnected(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    // Initial fetch
-    fetchLogs();
-    
-    // Set up interval for auto-refresh
-    const interval = setInterval(fetchLogs, 5000);
-
-    // Cleanup interval on unmount
-    return () => clearInterval(interval);
-  }, [isPaused]); // Re-run effect when isPaused changes
+  const {
+    logs,
+    loading,
+    error,
+    connected,
+    lastUpdate,
+    isPaused,
+    setIsPaused,
+    agentId,
+    agentName
+  } = useLogFetcher();
 
   if (loading) {
     return (
@@ -132,6 +43,8 @@ export default function DashboardPage() {
   }
 
   if (error && !connected) {
+    const isNoAgentError = error.includes('No agent selected or available');
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50">
         <Header
@@ -139,16 +52,38 @@ export default function DashboardPage() {
           connected={false}
         />
         <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="text-red-600 text-6xl mb-4">⚠</div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Connection Error
-              </h2>
-              <p className="text-gray-600 mb-4">{error}</p>
-              <p className="text-sm text-gray-500">
-                Make sure the agent is running and accessible
-              </p>
+          <div className="flex items-center justify-center h-[60vh]">
+            <div className="text-center max-w-md mx-auto p-8 bg-white rounded-xl shadow-sm border border-red-100">
+              {isNoAgentError ? (
+                <>
+                  <div className="mx-auto w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-6">
+                    <ServerOff className="w-8 h-8 text-red-500" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-3">
+                    No Agents Configured
+                  </h2>
+                  <p className="text-gray-600 mb-6">
+                    There are no Traefik agents currently configured or available. Please configure an agent to start collecting logs.
+                  </p>
+                  <Button 
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    onClick={() => window.location.href = '/settings'}
+                  >
+                    Configure Agent
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="text-red-600 text-6xl mb-4">⚠</div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                    Connection Error
+                  </h2>
+                  <p className="text-gray-600 mb-4">{error}</p>
+                  <p className="text-sm text-gray-500">
+                    Make sure the agent is running and accessible
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>

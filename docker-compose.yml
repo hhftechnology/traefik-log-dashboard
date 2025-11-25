@@ -1,0 +1,74 @@
+services:
+  # Traefik Log Dashboard Agent
+  traefik-agent:
+    image: hhftechnology/traefik-log-dashboard-agent:dev-dashboard
+    container_name: traefik-log-dashboard-agent
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data/logs:/logs:ro
+      - ./data/geoip:/geoip:ro
+      - ./data/positions:/data
+    environment:
+      # Log Paths
+      - TRAEFIK_LOG_DASHBOARD_ACCESS_PATH=/logs/access.log
+      - TRAEFIK_LOG_DASHBOARD_ERROR_PATH=/logs/access.log
+      
+      # Authentication - REPLACE WITH YOUR TOKEN
+      - TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN=d41d8cd98f00b204e9800998ecf8427e
+      
+      # System Monitoring
+      - TRAEFIK_LOG_DASHBOARD_SYSTEM_MONITORING=true
+      
+      # GeoIP Configuration
+      - TRAEFIK_LOG_DASHBOARD_GEOIP_ENABLED=true
+      - TRAEFIK_LOG_DASHBOARD_GEOIP_CITY_DB=/geoip/GeoLite2-City.mmdb
+      - TRAEFIK_LOG_DASHBOARD_GEOIP_COUNTRY_DB=/geoip/GeoLite2-Country.mmdb
+      
+      # Log Format
+      - TRAEFIK_LOG_DASHBOARD_LOG_FORMAT=json
+      
+      # Server Port
+      - PORT=5000
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/logs/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - traefik-network
+
+  # Traefik Log Dashboard - Next.js web UI
+  traefik-dashboard:
+    image: hhftechnology/traefik-log-dashboard:dev-dashboard
+    container_name: traefik-log-dashboard
+    restart: unless-stopped
+    user: "1001:1001"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data/dashboard:/app/data
+    environment:
+      # Agent Configuration - REPLACE WITH YOUR TOKEN
+      - AGENT_API_URL=http://traefik-agent:5000
+      - AGENT_API_TOKEN=d41d8cd98f00b204e9800998ecf8427e
+      - AGENT_NAME=Default Agent
+      
+      # Node Environment
+      - NODE_ENV=production
+      - PORT=3000
+      
+      # Display Configuration
+      - NEXT_PUBLIC_SHOW_DEMO_PAGE=true
+      - NEXT_PUBLIC_MAX_LOGS_DISPLAY=500
+    depends_on:
+      traefik-agent:
+        condition: service_healthy
+    networks:
+      - traefik-network
+
+networks:
+  traefik-network:
+    external: true

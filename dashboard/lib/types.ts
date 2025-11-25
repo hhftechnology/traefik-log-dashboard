@@ -41,9 +41,16 @@ export interface LogPosition {
   Filename: string;
 }
 
+export interface AgentInfo {
+  id: string;
+  name: string;
+  version: string;
+}
+
 export interface LogsResponse {
   logs: string[];
   positions: LogPosition[];
+  agent?: AgentInfo;
 }
 
 export interface SystemStats {
@@ -58,7 +65,7 @@ export interface CPUStats {
   model?: string;
   cores: number;
   speed?: number;
-  usage_percent: number;  // Changed from usage
+  usage_percent: number;
   coreUsage?: number[];
 }
 
@@ -66,15 +73,15 @@ export interface MemoryStats {
   total: number;
   available: number;
   used: number;
-  used_percent: number;  // Added percentage
+  used_percent: number;
   free: number;
 }
 
 export interface DiskStats {
-  total: number;         // Changed from size
+  total: number;
   used: number;
-  free: number;          // Added free space
-  used_percent: number;  // Added percentage
+  free: number;
+  used_percent: number;
 }
 
 export interface LogFileSize {
@@ -106,6 +113,7 @@ export interface StatusResponse {
   system_monitoring: boolean;
   auth_enabled: boolean;
 }
+
 // Dashboard Metrics Types
 export interface RequestMetrics {
   total: number;
@@ -228,10 +236,10 @@ export interface DashboardMetrics {
   userAgents: UserAgentMetrics[];
   timeline: TimeSeriesPoint[];
   errors: ErrorLog[];
-  logs: TraefikLog[]; // Include raw logs for RecentLogsTable
-  topRequestAddresses: AddressMetric[]; // Added for TopRequestAddressesCard
-  topRequestHosts: HostMetric[]; // Added for TopRequestHostsCard
-  topClientIPs: ClientMetric[]; // Added for TopClientIPsCard       
+  logs: TraefikLog[];
+  topRequestAddresses: AddressMetric[];
+  topRequestHosts: HostMetric[];
+  topClientIPs: ClientMetric[];
 }
 
 // Config Types

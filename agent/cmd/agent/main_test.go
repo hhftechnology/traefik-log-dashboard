@@ -10,6 +10,7 @@ import (
 	"github.com/hhftechnology/traefik-log-dashboard/agent/internal/auth"
 	"github.com/hhftechnology/traefik-log-dashboard/agent/internal/config"
 	"github.com/hhftechnology/traefik-log-dashboard/agent/internal/routes"
+	"github.com/hhftechnology/traefik-log-dashboard/agent/internal/state"
 )
 
 func TestRootEndpoint(t *testing.T) {
@@ -55,7 +56,8 @@ func TestStatusEndpoint(t *testing.T) {
 		Port:             "5000",
 	}
 
-	handler := routes.NewHandler(cfg)
+	sm := state.NewStateManager(cfg)
+	handler := routes.NewHandler(cfg, sm)
 	req := httptest.NewRequest(http.MethodGet, "/api/logs/status", nil)
 	w := httptest.NewRecorder()
 
@@ -148,7 +150,8 @@ func TestCORSHeaders(t *testing.T) {
 		Port:             "5000",
 	}
 
-	handler := routes.NewHandler(cfg)
+	sm := state.NewStateManager(cfg)
+	handler := routes.NewHandler(cfg, sm)
 	req := httptest.NewRequest(http.MethodOptions, "/api/logs/status", nil)
 	w := httptest.NewRecorder()
 
@@ -169,7 +172,8 @@ func TestSystemResourcesEndpoint(t *testing.T) {
 		Port:             "5000",
 	}
 
-	handler := routes.NewHandler(cfg)
+	sm := state.NewStateManager(cfg)
+	handler := routes.NewHandler(cfg, sm)
 	req := httptest.NewRequest(http.MethodGet, "/api/system/resources", nil)
 	w := httptest.NewRecorder()
 
@@ -208,7 +212,8 @@ func TestSystemResourcesDisabled(t *testing.T) {
 		Port:             "5000",
 	}
 
-	handler := routes.NewHandler(cfg)
+	sm := state.NewStateManager(cfg)
+	handler := routes.NewHandler(cfg, sm)
 	req := httptest.NewRequest(http.MethodGet, "/api/system/resources", nil)
 	w := httptest.NewRecorder()
 

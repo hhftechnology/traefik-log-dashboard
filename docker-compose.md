@@ -69,6 +69,10 @@ services:
       # Node Environment
       - NODE_ENV=production
       - PORT=3000
+
+      # Display Configuration
+      - NEXT_PUBLIC_SHOW_DEMO_PAGE=true
+      - NEXT_PUBLIC_MAX_LOGS_DISPLAY=500
     depends_on:
       traefik-agent:
         condition: service_healthy
@@ -155,6 +159,10 @@ services:
       # Node Environment
       - NODE_ENV=production
       - PORT=3000
+
+      # Display Configuration
+      - NEXT_PUBLIC_SHOW_DEMO_PAGE=true
+      - NEXT_PUBLIC_MAX_LOGS_DISPLAY=500
     depends_on:
       traefik-agent:
         condition: service_healthy
@@ -206,6 +214,10 @@ services:
       # Node Environment
       - NODE_ENV=production
       - PORT=3000
+
+      # Display Configuration
+      - NEXT_PUBLIC_SHOW_DEMO_PAGE=true
+      - NEXT_PUBLIC_MAX_LOGS_DISPLAY=500
     depends_on:
       - traefik-agent
       - traefik-agent-2
@@ -465,6 +477,8 @@ services:
       - AGENT_NAME=Production Agent
       - NODE_ENV=production
       - PORT=3000
+      - NEXT_PUBLIC_SHOW_DEMO_PAGE=true
+      - NEXT_PUBLIC_MAX_LOGS_DISPLAY=500
     deploy:
       resources:
         limits:
@@ -567,6 +581,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
+      # Display Configuration
+      - NEXT_PUBLIC_SHOW_DEMO_PAGE=true
+      - NEXT_PUBLIC_MAX_LOGS_DISPLAY=500
       # No default agent defined - will add via UI
 ```
 

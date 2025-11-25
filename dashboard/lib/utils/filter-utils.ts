@@ -144,6 +144,13 @@ export function applyFilters(logs: TraefikLog[], settings: FilterSettings): Trae
       return false;
     }
 
+    // Filter unknown routers/services
+    if (settings.excludeUnknownRoutersServices) {
+      if (log.RouterName === 'Unknown' || log.ServiceName === 'Unknown') {
+        return false;
+      }
+    }
+
     // Filter status codes
     if (settings.excludeStatusCodes.includes(log.DownstreamStatus)) {
       return false;
@@ -201,6 +208,10 @@ export function getActiveFilterSummary(settings: FilterSettings): string[] {
 
   if (settings.excludePrivateIPs) {
     summary.push('Private IPs excluded');
+  }
+
+  if (settings.excludeUnknownRoutersServices) {
+    summary.push('Unknown routers/services excluded');
   }
 
   if (settings.excludeStatusCodes.length > 0) {

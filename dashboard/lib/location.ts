@@ -1,4 +1,5 @@
 import { GeoLocation, TraefikLog } from './types';
+import { apiClient } from './api-client';
 
 /**
  * Extract IP address from client address string
@@ -118,19 +119,7 @@ export function getCountryCoordinates(countryCode: string): { lat: number; lon: 
  */
 async function lookupLocationsFromAgent(ips: string[]): Promise<Map<string, any>> {
   try {
-    const response = await fetch('/api/location/lookup', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ ips }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Location lookup failed: ${response.statusText}`);
-    }
-
-    const data = await response.json();
+    const data = await apiClient.lookupLocations(ips);
     const locations = data.locations || [];
 
     // Convert to Map for easy lookup

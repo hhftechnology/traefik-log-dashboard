@@ -10,6 +10,7 @@ import (
 	"github.com/hhftechnology/traefik-log-dashboard/agent/internal/auth"
 	"github.com/hhftechnology/traefik-log-dashboard/agent/internal/config"
 	"github.com/hhftechnology/traefik-log-dashboard/agent/internal/routes"
+	"github.com/hhftechnology/traefik-log-dashboard/agent/internal/state"
 	"github.com/hhftechnology/traefik-log-dashboard/agent/pkg/location"
 	"github.com/hhftechnology/traefik-log-dashboard/agent/pkg/logger"
 )
@@ -28,7 +29,7 @@ func main() {
 	if cfg.GeoIPEnabled {
 		logger.Log.Printf("GeoIP: Enabled")
 		location.SetDatabasePaths(cfg.GeoIPCityDB, cfg.GeoIPCountryDB)
-		
+
 		// Initialize location lookups
 		if err := location.InitializeLookups(); err != nil {
 			logger.Log.Printf("GeoIP: Failed to initialize (lookups will be unavailable): %v", err)
@@ -52,8 +53,11 @@ func main() {
 		logger.Log.Printf("Authentication: Disabled (no token configured)")
 	}
 
+	// Initialize state manager
+	stateManager := state.NewStateManager(cfg)
+
 	// Initialize route handler
-	handler := routes.NewHandler(cfg)
+	handler := routes.NewHandler(cfg, stateManager)
 
 	// Set up HTTP routes
 	mux := http.NewServeMux()

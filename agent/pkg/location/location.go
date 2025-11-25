@@ -4,8 +4,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/oschwald/geoip2-golang"
 	"github.com/hhftechnology/traefik-log-dashboard/agent/pkg/logger"
+	"github.com/oschwald/geoip2-golang"
 )
 
 // Location represents geolocation information for an IP address
@@ -179,6 +179,7 @@ func isPrivateIP(ip net.IP) bool {
 	// Check for IPv4 private ranges
 	if ip4 := ip.To4(); ip4 != nil {
 		return ip4[0] == 10 ||
+			ip4[0] == 11 || // Added 11.0.0.0/8
 			(ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31) ||
 			(ip4[0] == 192 && ip4[1] == 168) ||
 			ip4[0] == 127 // localhost
