@@ -81,7 +81,7 @@ class BackgroundScheduler {
   private async fetchLogs(url: string, token: string): Promise<TraefikLog[]> {
     try {
       // Ensure URL doesn't end with slash
-      let baseUrl = url.replace(/\/$/, '');
+      const baseUrl = url.replace(/\/$/, '');
       
       // FIX: If running in container and url is localhost, try to use host.docker.internal or service name
       // This is a common issue when running dashboard in container but agent is on host or another container

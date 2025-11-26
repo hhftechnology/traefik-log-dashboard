@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 /**
  * GET /api/alerts/stats - Get alert statistics
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const history = getNotificationHistory(1000); // Get last 1000 notifications
     

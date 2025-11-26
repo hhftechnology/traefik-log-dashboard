@@ -135,7 +135,7 @@ export default function AlertsSettingsPage() {
       } else {
         toast.error('Test failed: ' + data.error);
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to test webhook');
     } finally {
       setTestingWebhook(null);
@@ -157,7 +157,7 @@ export default function AlertsSettingsPage() {
         toast.success(`Webhook ${!webhook.enabled ? 'enabled' : 'disabled'}`);
         fetchData();
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to update webhook');
     }
   };
@@ -174,7 +174,7 @@ export default function AlertsSettingsPage() {
         toast.success('Webhook deleted');
         fetchData();
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to delete webhook');
     }
   };
@@ -232,7 +232,7 @@ export default function AlertsSettingsPage() {
         toast.success(`Alert ${!alert.enabled ? 'enabled' : 'disabled'}`);
         fetchData();
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to update alert');
     }
   };
@@ -268,7 +268,7 @@ export default function AlertsSettingsPage() {
       } else {
         toast.error('Test failed: ' + data.error);
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to test alert');
     } finally {
       setTestingAlert(null);
@@ -287,7 +287,7 @@ export default function AlertsSettingsPage() {
         toast.success('Alert rule deleted');
         fetchData();
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to delete alert rule');
     }
   };

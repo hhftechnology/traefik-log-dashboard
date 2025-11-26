@@ -2,14 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+
 import {
   Database,
   Save,
   Trash2,
   Download,
   ChevronLeft,
-  HardDrive,
   Calendar,
   Clock,
   ToggleLeft,
@@ -75,7 +74,7 @@ export default function HistoricalSettingsPage() {
       } else {
         toast.error('Failed to save configuration');
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to save configuration');
     } finally {
       setSaving(false);
@@ -98,7 +97,7 @@ export default function HistoricalSettingsPage() {
       } else {
         toast.error('Failed to cleanup historical data');
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to cleanup historical data');
     } finally {
       setCleaning(false);
@@ -127,7 +126,7 @@ export default function HistoricalSettingsPage() {
       } else {
         toast.error('Failed to export data');
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to export data');
     }
   };
