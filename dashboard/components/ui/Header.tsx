@@ -2,11 +2,12 @@
 'use client';
 
 import Link from 'next/link';
-import { Activity, Home, Github, Settings, Filter } from 'lucide-react';
+import { Activity, Home, Github, Settings, Filter, Bell } from 'lucide-react';
 import { Button } from './button';
 import { Badge } from './badge';
 import AgentSelector from './AgentSelector';
 import { useAgents } from '@/lib/contexts/AgentContext';
+import { useEffect, useState } from 'react';
 
 
 interface HeaderProps {
@@ -25,6 +26,28 @@ export default function Header({
   showAgentSelector = true 
 }: HeaderProps) {
   const { selectedAgent } = useAgents();
+  const [alertCount, setAlertCount] = useState<number>(0);
+
+  useEffect(() => {
+    if (demoMode) return;
+
+    const fetchAlertStats = async () => {
+      try {
+        const res = await fetch('/api/alerts/stats');
+        if (res.ok) {
+          const data = await res.json();
+          setAlertCount(data.last24h || 0);
+        }
+      } catch (error) {
+        console.error('Failed to fetch alert stats:', error);
+      }
+    };
+
+    fetchAlertStats();
+    const interval = setInterval(fetchAlertStats, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [demoMode]);
 
   return (
     <header className="bg-white border-b border-red-200 sticky top-0 z-50 shadow-sm">
@@ -111,6 +134,26 @@ export default function Header({
                 <span className="hidden sm:inline">Home</span>
               </Link>
             </Button>
+
+            {/* Alert Stats Button */}
+            {!demoMode && (
+              <Button
+                asChild
+                variant="secondary"
+                size="icon"
+                className="border-red-300 text-red-700 hover:bg-red-50 relative"
+                title="Alerts"
+              >
+                <Link href="/settings/alerts">
+                  <Bell className="w-4 h-4" />
+                  {alertCount > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] text-white">
+                      {alertCount > 99 ? '99+' : alertCount}
+                    </span>
+                  )}
+                </Link>
+              </Button>
+            )}
 
             {/* Filter Settings Button (visible when not in demo mode) */}
             {!demoMode && (

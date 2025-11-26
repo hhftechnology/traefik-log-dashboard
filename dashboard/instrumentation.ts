@@ -8,6 +8,7 @@ export async function register() {
     syncEnvAgents();
     
     // Start the scheduler
+    console.log('[Instrumentation] Starting background scheduler...');
     backgroundScheduler.start();
   }
 }
