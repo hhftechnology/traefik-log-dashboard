@@ -13,7 +13,7 @@ export function calculateMetrics(logs: TraefikLog[], geoLocations: GeoLocation[]
   const perSecond = timeSpan > 0 ? total / timeSpan : 0;
 
   // Response time metrics
-  const durations = logs.map(l => l.Duration / 1000000); // Convert to milliseconds
+  const durations = logs.filter(l=>l.DownstreamStatus!=0).map(l => l.Duration / 1000000); // Convert to milliseconds and exclude logs with status 0
   const avgDuration = calculateAverage(durations);
   const p95Duration = calculatePercentile(durations, 95);
   const p99Duration = calculatePercentile(durations, 99);

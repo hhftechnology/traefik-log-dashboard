@@ -69,8 +69,11 @@ func CalculateMetrics(logs []TraefikLog) *Metrics {
 			metrics.Status5xx++
 		}
 
-		// Collect durations (convert ns to ms)
-		durations = append(durations, float64(log.Duration)/1000000)
+		// Exclude logs with status 0
+		if(log.DownstreamStatus != 0) {
+			// Collect durations (convert ns to ms)
+			durations = append(durations, float64(log.Duration)/1000000)
+		}	
 	}
 
 	// Calculate error rate
