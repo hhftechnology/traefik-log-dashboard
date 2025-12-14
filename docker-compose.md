@@ -150,6 +150,8 @@ services:
       - "3000:3000"
     volumes:
       - ./data/dashboard:/app/data
+      - ./data/geoip:/geoip:ro
+      - GEOIP_DB_PATH=/geoip/GeoLite2-City.mmdb
     environment:
       # Agent Configuration - REPLACE WITH YOUR TOKEN
       - AGENT_API_URL=http://traefik-agent:5000
