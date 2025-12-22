@@ -86,7 +86,7 @@ func main() {
 
 	// Create HTTP server
 	server := &http.Server{
-		Addr:    ":" + cfg.Port,
+		Addr:    cfg.Address + ":" + cfg.Port,
 		Handler: mux,
 	}
 

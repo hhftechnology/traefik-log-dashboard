@@ -11,6 +11,7 @@ type Config struct {
 	AuthToken        string
 	SystemMonitoring bool
 	MonitorInterval  int
+	Address          string
 	Port             string
 	LogFormat        string
 	GeoIPEnabled     bool
@@ -29,6 +30,7 @@ func Load() *Config {
 		AuthToken:        e.AuthToken,
 		SystemMonitoring: e.SystemMonitoring,
 		MonitorInterval:  2000, // Keep default for now
+		Address:          e.Address,
 		Port:             e.Port,
 		LogFormat:        e.LogFormat,
 		GeoIPEnabled:     e.GeoIPEnabled,
