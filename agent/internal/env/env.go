@@ -31,7 +31,7 @@ func LoadEnv() Env {
 	}
 
 	return Env{
-		Address:          getEnv("ADDRESS", ""),
+		Address:          getEnv("ADDRESS", "[::]"),
 		Port:             getEnv("PORT", "5000"),
 		AccessPath:       getEnv("TRAEFIK_LOG_DASHBOARD_ACCESS_PATH", "/var/log/traefik/access.log"),
 		ErrorPath:        getEnv("TRAEFIK_LOG_DASHBOARD_ERROR_PATH", "/var/log/traefik/traefik.log"),
