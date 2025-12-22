@@ -22,6 +22,7 @@ func main() {
 	logger.Log.Printf("Access Log Path: %s", cfg.AccessPath)
 	logger.Log.Printf("Error Log Path: %s", cfg.ErrorPath)
 	logger.Log.Printf("System Monitoring: %v", cfg.SystemMonitoring)
+	logger.Log.Printf("Address: %s", cfg.Address)
 	logger.Log.Printf("Port: %s", cfg.Port)
 
 	// Initialize GeoIP location services if enabled
@@ -92,7 +93,7 @@ func main() {
 
 	// Start server in a goroutine
 	go func() {
-		logger.Log.Printf("Server listening on port %s", cfg.Port)
+		logger.Log.Printf("Server listening on %s:%s", cfg.Address, cfg.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Log.Fatalf("Server error: %v", err)
 		}
