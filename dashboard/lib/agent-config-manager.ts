@@ -1,6 +1,6 @@
 // dashboard/lib/agent-config-manager.ts
 
-import { Agent, AgentStore } from './types/agent';
+import { Agent } from './types/agent';
 
 /**
  * Agent Configuration Manager
@@ -149,7 +149,7 @@ export class AgentConfigManager {
   /**
    * Update agent status
    */
-  static updateAgentStatus(id: string, online: boolean, error?: string): void {
+  static updateAgentStatus(id: string, online: boolean, _error?: string): void {
     this.updateAgent(id, {
       status: online ? 'online' : 'offline',
       lastSeen: online ? new Date() : undefined,

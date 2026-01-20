@@ -199,14 +199,14 @@ export default function AgentBulkOperations({ onClose }: BulkOperationsProps) {
   };
 
   return (
-    <div className="space-y-6 p-6 bg-white rounded-lg">
+    <div className="space-y-6 p-6 bg-card rounded-lg">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200 pb-4">
+      <div className="flex items-center justify-between border-b border-border pb-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">
+          <h3 className="text-lg font-semibold text-foreground">
             Bulk Operations
           </h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Manage multiple agents at once
           </p>
         </div>
@@ -222,28 +222,28 @@ export default function AgentBulkOperations({ onClose }: BulkOperationsProps) {
         <div
           className={`p-4 rounded-lg border ${
             result.type === 'success'
-              ? 'bg-green-50 border-green-200'
+              ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800'
               : result.type === 'error'
-              ? 'bg-red-50 border-red-200'
-              : 'bg-blue-50 border-blue-200'
+              ? 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800'
+              : 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
           }`}
         >
           <div className="flex gap-3">
             {result.type === 'success' ? (
-              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
             ) : result.type === 'error' ? (
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
             )}
             <div className="flex-1">
               <p
                 className={`font-medium ${
                   result.type === 'success'
-                    ? 'text-green-900'
+                    ? 'text-green-900 dark:text-green-100'
                     : result.type === 'error'
-                    ? 'text-red-900'
-                    : 'text-blue-900'
+                    ? 'text-red-900 dark:text-red-100'
+                    : 'text-blue-900 dark:text-blue-100'
                 }`}
               >
                 {result.message}
@@ -255,10 +255,10 @@ export default function AgentBulkOperations({ onClose }: BulkOperationsProps) {
                       key={index}
                       className={
                         result.type === 'success'
-                          ? 'text-green-800'
+                          ? 'text-green-800 dark:text-green-200'
                           : result.type === 'error'
-                          ? 'text-red-800'
-                          : 'text-blue-800'
+                          ? 'text-red-800 dark:text-red-200'
+                          : 'text-blue-800 dark:text-blue-200'
                       }
                     >
                       • {detail}
@@ -275,7 +275,7 @@ export default function AgentBulkOperations({ onClose }: BulkOperationsProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Export Operations */}
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Download className="w-4 h-4" />
             Export Configuration
           </h4>
@@ -315,7 +315,7 @@ export default function AgentBulkOperations({ onClose }: BulkOperationsProps) {
 
         {/* Import Operations */}
         <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Upload className="w-4 h-4" />
             Import Configuration
           </h4>
@@ -357,8 +357,8 @@ export default function AgentBulkOperations({ onClose }: BulkOperationsProps) {
       </div>
 
       {/* Status Operations */}
-      <div className="space-y-3 pt-4 border-t border-gray-200">
-        <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+      <div className="space-y-3 pt-4 border-t border-border">
+        <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
           <RefreshCw className="w-4 h-4" />
           Status Operations
         </h4>
@@ -375,17 +375,17 @@ export default function AgentBulkOperations({ onClose }: BulkOperationsProps) {
       </div>
 
       {/* Import Modes Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h5 className="font-semibold text-blue-900 mb-2 text-sm">
+      <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+        <h5 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 text-sm">
           Import Modes
         </h5>
-        <ul className="text-xs text-blue-800 space-y-1">
+        <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
           <li><strong>Merge:</strong> Adds new agents, updates existing ones</li>
           <li><strong>Replace:</strong> Removes all agents and imports new ones</li>
           <li><strong>Skip Existing:</strong> Only adds new agents, keeps existing ones unchanged</li>
         </ul>
-        <p className="text-xs text-blue-700 mt-3 flex items-center gap-2">
-          Currently using: 
+        <p className="text-xs text-blue-700 dark:text-blue-300 mt-3 flex items-center gap-2">
+          Currently using:
           <Badge variant="secondary" className="text-xs">
             Merge Mode
           </Badge>

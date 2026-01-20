@@ -9,12 +9,6 @@ import (
 
 // HandleStatus handles health check requests
 func (h *Handler) HandleStatus(w http.ResponseWriter, r *http.Request) {
-	utils.EnableCORS(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	accessPathExists := false
 	if info, err := os.Stat(h.config.AccessPath); err == nil {
 		accessPathExists = true
@@ -38,13 +32,13 @@ func (h *Handler) HandleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := map[string]interface{}{
-		"status":              "ok",
-		"access_path":         h.config.AccessPath,
-		"access_path_exists":  accessPathExists,
-		"error_path":          h.config.ErrorPath,
-		"error_path_exists":   errorPathExists,
-		"system_monitoring":   h.config.SystemMonitoring,
-		"auth_enabled":        h.config.AuthToken != "",
+		"status":             "ok",
+		"access_path":        h.config.AccessPath,
+		"access_path_exists": accessPathExists,
+		"error_path":         h.config.ErrorPath,
+		"error_path_exists":  errorPathExists,
+		"system_monitoring":  h.config.SystemMonitoring,
+		"auth_enabled":       h.config.AuthToken != "",
 	}
 
 	utils.RespondJSON(w, http.StatusOK, status)

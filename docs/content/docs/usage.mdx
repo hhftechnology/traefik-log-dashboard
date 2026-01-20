@@ -1,0 +1,127 @@
+---
+title: Usage
+description: How to use Traefik Log Dashboard
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Dashboard Overview
+
+The main dashboard at `/dashboard` displays real-time analytics from your connected Traefik agent.
+
+### Overview Cards
+
+- **Total Requests**: Aggregate count of all HTTP requests processed
+- **Average Response Time**: Mean response time across all requests (in milliseconds)
+- **Error Rate**: Percentage of requests with 4xx or 5xx status codes
+- **Active Services**: Number of unique Traefik services handling traffic
+
+### Geographic Cards
+
+- **Interactive Globe**: 3D visualization of request origins with zoom and rotation
+- **Geographic Map**: 2D heatmap view with smooth transitions from globe
+- **Top Countries**: Requests grouped by country
+- **Top Cities**: Requests grouped by city
+
+### Traffic Analysis
+
+- **Status Code Distribution**: Breakdown of 2xx, 3xx, 4xx, 5xx responses
+- **Top Services**: Most active Traefik services by request count
+- **Top Routers**: Most active Traefik routers by request count
+- **HTTP Methods**: Distribution of GET, POST, PUT, DELETE, etc.
+
+### Performance Metrics
+
+- **Response Time Chart**: Time-series graph of response times
+- **Request Rate**: Requests per second/minute/hour
+- **Slowest Endpoints**: Top routes by average response time
+- **Error Timeline**: Time-series of error occurrences
+
+## Filtering Logs
+
+The filter toolbar at the top of the dashboard provides:
+
+- **Time Range**: Last 1h, 6h, 24h, 7d, 30d, or custom range
+- **Status Codes**: Filter by 2xx, 3xx, 4xx, 5xx
+- **HTTP Methods**: GET, POST, PUT, DELETE, PATCH, OPTIONS
+- **Services**: Filter by Traefik service name
+- **Routers**: Filter by Traefik router name
+- **Search**: Free-text search across all fields
+
+### Advanced Filters
+
+Navigate to **Settings > Filters** to create custom filter rules:
+
+- **Include Mode**: Show ONLY logs matching your criteria
+- **Exclude Mode**: Hide logs matching your criteria
+- **Operators**: equals, contains, starts with, ends with, regex
+- **Geographic**: Filter by country or city
+
+## Managing Agents
+
+Navigate to **Settings > Agents** to manage your Traefik agent connections.
+
+### Adding Agents
+
+1. Click **Add Agent**
+2. Enter the agent name, URL, and authentication token
+3. Select location type (on-site or off-site)
+4. Click **Save**
+
+### Environment Agent
+
+<Callout type="warn">
+The agent configured via environment variables (`AGENT_API_URL`, `AGENT_API_TOKEN`) cannot be deleted from the UI. This ensures you always have a primary agent connection.
+</Callout>
+
+## Setting Up Alerts
+
+Navigate to **Settings > Alerts** to configure notifications.
+
+### Webhook Setup
+
+1. Click the **Webhooks** tab
+2. Add your Discord or generic webhook URL
+3. Test the webhook to verify connectivity
+
+### Alert Rules
+
+Create alert rules with:
+- **Threshold Alerts**: Trigger when metrics exceed limits
+- **Interval Alerts**: Scheduled summaries (hourly, daily)
+- **Custom Parameters**: Request count, error rate, response time, top IPs, etc.
+
+## Agent API Usage
+
+All API endpoints require Bearer token authentication.
+
+### Get Access Logs
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  "http://localhost:5000/api/logs/access?lines=100"
+```
+
+### Get Agent Status
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  "http://localhost:5000/api/logs/status"
+```
+
+### Get System Resources
+
+```bash
+curl -H "Authorization: Bearer YOUR_TOKEN" \
+  "http://localhost:5000/api/system/resources"
+```
+
+## Demo Mode
+
+Access `/dashboard/demo` to explore the dashboard with simulated data. No agent connection required.
+
+Demo mode generates realistic traffic patterns including:
+- Geographic distribution across multiple countries
+- Various status codes and response times
+- Multiple services and routers
+- Simulated error scenarios

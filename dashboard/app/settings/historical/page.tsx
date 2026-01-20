@@ -17,10 +17,18 @@ import {
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { HistoricalConfig } from '@/lib/types/historical';
+import { buildUrl } from '@/lib/utils/base-url';
+
+interface HistoricalStats {
+  total_entries: number;
+  oldest_entry: string | null;
+  newest_entry: string | null;
+  db_size_bytes: number;
+}
 
 export default function HistoricalSettingsPage() {
   const [config, setConfig] = useState<HistoricalConfig | null>(null);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<HistoricalStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cleaning, setCleaning] = useState(false);
@@ -32,7 +40,7 @@ export default function HistoricalSettingsPage() {
 
   const fetchConfig = async () => {
     try {
-      const response = await fetch('/api/historical/config');
+      const response = await fetch(buildUrl('/api/historical/config'));
       if (response.ok) {
         const data = await response.json();
         setConfig(data.config);
@@ -47,7 +55,7 @@ export default function HistoricalSettingsPage() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/historical/data');
+      const response = await fetch(buildUrl('/api/historical/data'));
       if (response.ok) {
         const data = await response.json();
         setStats(data.stats);
@@ -62,7 +70,7 @@ export default function HistoricalSettingsPage() {
 
     setSaving(true);
     try {
-      const response = await fetch('/api/historical/config', {
+      const response = await fetch(buildUrl('/api/historical/config'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config),
@@ -74,7 +82,7 @@ export default function HistoricalSettingsPage() {
       } else {
         toast.error('Failed to save configuration');
       }
-    } catch (_error) {
+    } catch {
       toast.error('Failed to save configuration');
     } finally {
       setSaving(false);
@@ -86,7 +94,7 @@ export default function HistoricalSettingsPage() {
 
     setCleaning(true);
     try {
-      const response = await fetch('/api/historical/data?action=cleanup', {
+      const response = await fetch(buildUrl('/api/historical/data?action=cleanup'), {
         method: 'POST',
       });
 
@@ -97,7 +105,7 @@ export default function HistoricalSettingsPage() {
       } else {
         toast.error('Failed to cleanup historical data');
       }
-    } catch (_error) {
+    } catch {
       toast.error('Failed to cleanup historical data');
     } finally {
       setCleaning(false);
@@ -106,7 +114,7 @@ export default function HistoricalSettingsPage() {
 
   const handleExport = async () => {
     try {
-      const response = await fetch('/api/historical/data?action=export', {
+      const response = await fetch(buildUrl('/api/historical/data?action=export'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: {} }),
@@ -126,7 +134,7 @@ export default function HistoricalSettingsPage() {
       } else {
         toast.error('Failed to export data');
       }
-    } catch (_error) {
+    } catch {
       toast.error('Failed to export data');
     }
   };
@@ -142,15 +150,15 @@ export default function HistoricalSettingsPage() {
   if (loading || !config) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="text-center py-12 text-gray-500">Loading...</div>
+        <div className="text-center py-12 text-muted-foreground">Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white border-b border-red-200">
+      <div className="bg-card border-b border-border">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -160,11 +168,11 @@ export default function HistoricalSettingsPage() {
                 </Link>
               </Button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <Database className="w-6 h-6 text-red-600" />
+                <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                  <Database className="w-6 h-6 text-primary" />
                   Historical Data Storage(Experimantal)
                 </h1>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   Configure long-term data retention and archival
                 </p>
               </div>
@@ -177,22 +185,22 @@ export default function HistoricalSettingsPage() {
 
         <div className="grid grid-cols-1 gap-6">
           {/* Configuration Card */}
-          <div className="bg-white border-2 border-red-200 rounded-lg p-6">
+          <div className="bg-card border-2 border-border rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Configuration</h2>
 
             {/* Enable Toggle */}
-            <div className="mb-6 pb-6 border-b">
+            <div className="mb-6 pb-6 border-b border-border">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <label className="font-medium text-gray-900 flex items-center gap-2">
+                  <label className="font-medium text-foreground flex items-center gap-2">
                 {config.enabled ? (
-                  <ToggleRight className="w-6 h-6 text-green-500" />
+                  <ToggleRight className="w-6 h-6 text-green-500 dark:text-green-400" />
                 ) : (
-                  <ToggleLeft className="w-6 h-6 text-gray-400" />
+                  <ToggleLeft className="w-6 h-6 text-muted-foreground" />
                 )}
                 Historical Data Storage
                   </label>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     {config.enabled
                       ? 'Automatically archiving metrics to separate database'
                       : 'Historical data storage is disabled'}
@@ -209,7 +217,7 @@ export default function HistoricalSettingsPage() {
 
             {/* Retention Days */}
             <div className="mb-4">
-              <label className="block font-medium text-gray-900 mb-2 flex items-center gap-2">
+              <label className="block font-medium text-foreground mb-2 flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 Retention Period (days)
               </label>
@@ -221,16 +229,16 @@ export default function HistoricalSettingsPage() {
                 onChange={(e) =>
                   setConfig({ ...config, retention_days: parseInt(e.target.value) || 90 })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 Data older than this will be automatically deleted
               </p>
             </div>
 
             {/* Archive Interval */}
             <div className="mb-6">
-              <label className="block font-medium text-gray-900 mb-2 flex items-center gap-2">
+              <label className="block font-medium text-foreground mb-2 flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 Archive Interval (minutes)
               </label>
@@ -242,15 +250,15 @@ export default function HistoricalSettingsPage() {
                 onChange={(e) =>
                   setConfig({ ...config, archive_interval: parseInt(e.target.value) || 60 })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 How often to snapshot current metrics (minimum: 1 minute)
               </p>
             </div>
 
             {/* Save Button */}
-            <Button onClick={handleSave} disabled={saving} className="w-full bg-red-600 hover:bg-red-700">
+            <Button onClick={handleSave} disabled={saving} className="w-full">
               <Save className="w-4 h-4 mr-2" />
               {saving ? 'Saving...' : 'Save Configuration'}
             </Button>
@@ -258,45 +266,45 @@ export default function HistoricalSettingsPage() {
 
           {/* Statistics Card */}
           {stats && (
-            <div className="bg-white border-2 border-red-200 rounded-lg p-6">
+            <div className="bg-card border-2 border-border rounded-lg p-6">
               <h2 className="text-xl font-semibold mb-4">Storage Statistics</h2>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-900">{stats.total_entries}</div>
-                  <div className="text-sm text-gray-600">Total Entries</div>
+                <div className="text-center p-4 bg-muted rounded-lg">
+                  <div className="text-2xl font-bold text-foreground">{stats.total_entries}</div>
+                  <div className="text-sm text-muted-foreground">Total Entries</div>
                 </div>
 
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-2xl font-bold text-gray-900">
+                <div className="text-center p-4 bg-muted rounded-lg">
+                  <div className="text-2xl font-bold text-foreground">
                     {formatBytes(stats.db_size_bytes)}
                   </div>
-                  <div className="text-sm text-gray-600">Database Size</div>
+                  <div className="text-sm text-muted-foreground">Database Size</div>
                 </div>
 
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-xs font-mono text-gray-900">
+                <div className="text-center p-4 bg-muted rounded-lg">
+                  <div className="text-xs font-mono text-foreground">
                     {stats.oldest_entry
                       ? new Date(stats.oldest_entry).toLocaleDateString()
                       : 'N/A'}
                   </div>
-                  <div className="text-sm text-gray-600">Oldest Entry</div>
+                  <div className="text-sm text-muted-foreground">Oldest Entry</div>
                 </div>
 
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
-                  <div className="text-xs font-mono text-gray-900">
+                <div className="text-center p-4 bg-muted rounded-lg">
+                  <div className="text-xs font-mono text-foreground">
                     {stats.newest_entry
                       ? new Date(stats.newest_entry).toLocaleDateString()
                       : 'N/A'}
                   </div>
-                  <div className="text-sm text-gray-600">Newest Entry</div>
+                  <div className="text-sm text-muted-foreground">Newest Entry</div>
                 </div>
               </div>
             </div>
           )}
 
           {/* Actions Card */}
-          <div className="bg-white border-2 border-red-200 rounded-lg p-6">
+          <div className="bg-card border-2 border-border rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Data Management</h2>
 
             <div className="space-y-3">
@@ -320,7 +328,7 @@ export default function HistoricalSettingsPage() {
               </Button>
             </div>
 
-            <p className="text-xs text-gray-500 mt-4">
+            <p className="text-xs text-muted-foreground mt-4">
               Note: Historical data is stored in a separate SQLite database for better performance
               and data management.
             </p>

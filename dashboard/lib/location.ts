@@ -1,45 +1,95 @@
 import { GeoLocation, TraefikLog } from './types';
 import { apiClient } from './api-client';
+import { isPrivateIP, extractIP } from './utils/ip-utils';
+
+// PERFORMANCE FIX: In-memory cache for GeoIP lookups
+// MEMORY LEAK FIX: Improved cache management with periodic cleanup
+const geoIPCache = new Map<string, { country: string; city?: string; latitude?: number; longitude?: number }>();
+const CACHE_MAX_SIZE = 5000; // Limit cache size to prevent memory bloat
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour TTL
+const cacheTimestamps = new Map<string, number>();
+const CLEANUP_INTERVAL = 30 * 60 * 1000; // Cleanup every 30 minutes
 
 /**
- * Extract IP address from client address string
+ * Clear expired cache entries using LRU strategy
  */
-export function extractIP(clientAddr: string): string {
-  if (!clientAddr) return '';
+function cleanExpiredCache(): void {
+  const now = Date.now();
+  const expired: string[] = [];
   
-  // Handle IPv6 addresses
-  if (clientAddr.includes('[')) {
-    const match = clientAddr.match(/\[([^\]]+)\]/);
-    return match ? match[1] : clientAddr;
+  // Find expired entries
+  for (const [ip, timestamp] of cacheTimestamps.entries()) {
+    if (now - timestamp > CACHE_TTL) {
+      expired.push(ip);
+    }
   }
-  
-  // Remove port for IPv4
-  const lastColonIndex = clientAddr.lastIndexOf(':');
-  if (lastColonIndex > 0 && !clientAddr.includes('::')) {
-    return clientAddr.substring(0, lastColonIndex);
+
+  // Remove expired entries
+  expired.forEach(ip => {
+    geoIPCache.delete(ip);
+    cacheTimestamps.delete(ip);
+  });
+
+  // If still too large after removing expired, use LRU eviction
+  if (geoIPCache.size >= CACHE_MAX_SIZE) {
+    const sortedEntries = Array.from(cacheTimestamps.entries())
+      .sort((a, b) => a[1] - b[1]); // Sort by timestamp (oldest first)
+    
+    const toRemove = sortedEntries.slice(0, CACHE_MAX_SIZE / 4); // Remove oldest 25%
+    toRemove.forEach(([ip]) => {
+      geoIPCache.delete(ip);
+      cacheTimestamps.delete(ip);
+    });
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[GeoIP Cache] LRU eviction: removed ${toRemove.length} entries`);
+    }
   }
-  
-  return clientAddr;
+
+  if (expired.length > 0 && process.env.NODE_ENV === 'development') {
+    console.warn(`[GeoIP Cache] Cleaned up ${expired.length} expired entries`);
+  }
+}
+
+// Start periodic cleanup (only in server context)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+let _cleanupInterval: NodeJS.Timeout | null = null;
+if (typeof window === 'undefined') {
+  _cleanupInterval = setInterval(cleanExpiredCache, CLEANUP_INTERVAL);
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('[GeoIP Cache] Periodic cleanup initialized (runs every 30 minutes)');
+  }
 }
 
 /**
- * Check if IP is private/local
+ * Add to cache with size limit using LRU strategy
  */
-export function isPrivateIP(ip: string): boolean {
-  if (!ip) return true;
-  
-  return (
-    ip.startsWith('10.') ||
-    ip.startsWith('172.') ||
-    ip.startsWith('192.168.') ||
-    ip.startsWith('127.') ||
-    ip === 'localhost' ||
-    ip === '::1' ||
-    ip.startsWith('fe80:') ||
-    ip.startsWith('fc00:') ||
-    ip.startsWith('fd00:')
-  );
+function addToCache(ip: string, data: { country: string; city?: string; latitude?: number; longitude?: number }): void {
+  // Clean expired entries first if approaching limit
+  if (geoIPCache.size > CACHE_MAX_SIZE * 0.8) {
+    cleanExpiredCache();
+  }
+
+  // If still too large after cleanup, use LRU eviction
+  if (geoIPCache.size >= CACHE_MAX_SIZE) {
+    const sortedEntries = Array.from(cacheTimestamps.entries())
+      .sort((a, b) => a[1] - b[1]); // Sort by timestamp (oldest first)
+    const toRemove = sortedEntries.slice(0, CACHE_MAX_SIZE / 4); // Remove oldest 25%
+    toRemove.forEach(([ipToRemove]) => {
+      geoIPCache.delete(ipToRemove);
+      cacheTimestamps.delete(ipToRemove);
+    });
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[GeoIP Cache] LRU eviction before add: removed ${toRemove.length} entries`);
+    }
+  }
+
+  geoIPCache.set(ip, data);
+  cacheTimestamps.set(ip, Date.now());
 }
+
+// Export utility functions for backward compatibility
+export { extractIP, isPrivateIP } from './utils/ip-utils';
 
 // Country coordinates for map visualization
 const COUNTRY_COORDS: Record<string, { lat: number; lon: number }> = {
@@ -115,22 +165,49 @@ export function getCountryCoordinates(countryCode: string): { lat: number; lon: 
 }
 
 /**
- * Lookup locations from agent API
+ * Lookup locations from agent API with caching
  */
-async function lookupLocationsFromAgent(ips: string[]): Promise<Map<string, any>> {
+async function lookupLocationsFromAgent(ips: string[]): Promise<Map<string, { country: string; city?: string; latitude?: number; longitude?: number }>> {
   try {
-    const data = await apiClient.lookupLocations(ips);
+    // PERFORMANCE FIX: Check cache first, only lookup uncached IPs
+    const uncachedIPs: string[] = [];
+    const locationMap = new Map();
+
+    ips.forEach(ip => {
+      const cached = geoIPCache.get(ip);
+      if (cached) {
+        locationMap.set(ip, cached);
+      } else {
+        uncachedIPs.push(ip);
+      }
+    });
+
+    // If all IPs were cached, return immediately
+    if (uncachedIPs.length === 0) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`GeoIP: All ${ips.length} IPs found in cache`);
+      }
+      return locationMap;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`GeoIP: ${locationMap.size} cached, ${uncachedIPs.length} need lookup`);
+    }
+
+    // Lookup only uncached IPs
+    const data = await apiClient.lookupLocations(uncachedIPs);
     const locations = data.locations || [];
 
-    // Convert to Map for easy lookup
-    const locationMap = new Map();
-    locations.forEach((loc: any) => {
-      locationMap.set(loc.ipAddress, {
+    // Add to map and cache
+    locations.forEach((loc: { ipAddress: string; country?: string; city?: string; latitude?: number; longitude?: number }) => {
+      const geoData = {
         country: loc.country || 'Unknown',
         city: loc.city,
         latitude: loc.latitude,
         longitude: loc.longitude,
-      });
+      };
+      locationMap.set(loc.ipAddress, geoData);
+      addToCache(loc.ipAddress, geoData); // Cache the result
     });
 
     return locationMap;
@@ -166,7 +243,9 @@ export async function aggregateGeoLocations(
     return [];
   }
 
-  console.log(`Looking up ${uniqueIPs.size} unique IPs`);
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(`Looking up ${uniqueIPs.size} unique IPs`);
+  }
 
   // Call agent API for location lookups (it handles batching internally)
   if (onProgress) {
@@ -235,7 +314,9 @@ export async function aggregateGeoLocations(
     }))
     .sort((a, b) => b.count - a.count);
 
-  console.log(`Location lookup complete: ${locations.length} countries found`);
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(`Location lookup complete: ${locations.length} countries found`);
+  }
 
   return locations;
 }

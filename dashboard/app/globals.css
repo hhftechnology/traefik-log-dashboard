@@ -1,75 +1,172 @@
+@import url("https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=PT+Mono&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  /* Red Theme - Light Mode */
   :root {
-    --radius: 0.65rem;
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.141 0.005 285.823);
+    --radius: 0.625rem;
+    --background: oklch(0.98 0.005 15);
+    --foreground: oklch(0.18 0.02 15);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.141 0.005 285.823);
+    --card-foreground: oklch(0.18 0.02 15);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.141 0.005 285.823);
-    --primary: oklch(0.576 0.224 25.731);
-    --primary-foreground: oklch(0.985 0.007 17.38);
-    --secondary: oklch(0.967 0.001 286.375);
-    --secondary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.967 0.001 286.375);
-    --muted-foreground: oklch(0.552 0.016 285.938);
-    --accent: oklch(0.967 0.001 286.375);
-    --accent-foreground: oklch(0.21 0.006 285.885);
-    --destructive: oklch(0.576 0.224 25.731);
-    --border: oklch(0.92 0.004 286.32);
-    --input: oklch(0.92 0.004 286.32);
-    --ring: oklch(0.576 0.224 25.731);
-    --chart-1: oklch(0.576 0.224 25.731);
-    --chart-2: oklch(0.646 0.222 41.116);
-    --chart-3: oklch(0.6 0.118 184.704);
-    --chart-4: oklch(0.398 0.07 227.392);
-    --chart-5: oklch(0.828 0.189 84.429);
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.141 0.005 285.823);
-    --sidebar-primary: oklch(0.576 0.224 25.731);
-    --sidebar-primary-foreground: oklch(0.985 0.007 17.38);
-    --sidebar-accent: oklch(0.967 0.001 286.375);
-    --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-    --sidebar-border: oklch(0.92 0.004 286.32);
-    --sidebar-ring: oklch(0.576 0.224 25.731);
+    --popover-foreground: oklch(0.18 0.02 15);
+    --primary: oklch(0.55 0.22 25);
+    --primary-foreground: oklch(0.98 0.005 15);
+    --secondary: oklch(0.95 0.015 15);
+    --secondary-foreground: oklch(0.35 0.05 15);
+    --muted: oklch(0.95 0.01 15);
+    --muted-foreground: oklch(0.5 0.02 15);
+    --accent: oklch(0.93 0.02 15);
+    --accent-foreground: oklch(0.55 0.22 25);
+    --destructive: oklch(0.55 0.22 25);
+    --destructive-foreground: oklch(0.98 0.005 15);
+    --border: oklch(0.9 0.015 15);
+    --input: oklch(0.9 0.015 15);
+    --ring: oklch(0.55 0.22 25);
+    --chart-1: oklch(0.55 0.22 25);
+    --chart-2: oklch(0.65 0.18 35);
+    --chart-3: oklch(0.45 0.15 15);
+    --chart-4: oklch(0.7 0.15 45);
+    --chart-5: oklch(0.6 0.2 20);
+    --sidebar-background: oklch(0.98 0.005 15);
+    --sidebar-foreground: oklch(0.18 0.02 15);
+    --sidebar-primary: oklch(0.55 0.22 25);
+    --sidebar-primary-foreground: oklch(0.98 0.005 15);
+    --sidebar-accent: oklch(0.93 0.02 15);
+    --sidebar-accent-foreground: oklch(0.55 0.22 25);
+    --sidebar-border: oklch(0.9 0.015 15);
+    --sidebar-ring: oklch(0.55 0.22 25);
   }
 
+  /* Red Theme - Dark Mode */
   .dark {
-    --background: oklch(0.141 0.005 285.823);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.21 0.006 285.885);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.21 0.006 285.885);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.637 0.237 25.331);
-    --primary-foreground: oklch(0.971 0.013 17.38);
-    --secondary: oklch(0.274 0.006 286.033);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.274 0.006 286.033);
-    --muted-foreground: oklch(0.705 0.015 286.067);
-    --accent: oklch(0.274 0.006 286.033);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.637 0.237 25.331);
-    --chart-1: oklch(0.637 0.237 25.331);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.21 0.006 285.885);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.637 0.237 25.331);
-    --sidebar-primary-foreground: oklch(0.971 0.013 17.38);
-    --sidebar-accent: oklch(0.274 0.006 286.033);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.637 0.237 25.331);
+    --background: oklch(0.15 0.015 15);
+    --foreground: oklch(0.95 0.005 15);
+    --card: oklch(0.18 0.015 15);
+    --card-foreground: oklch(0.95 0.005 15);
+    --popover: oklch(0.18 0.015 15);
+    --popover-foreground: oklch(0.95 0.005 15);
+    --primary: oklch(0.6 0.2 25);
+    --primary-foreground: oklch(0.15 0.015 15);
+    --secondary: oklch(0.25 0.02 15);
+    --secondary-foreground: oklch(0.9 0.005 15);
+    --muted: oklch(0.25 0.015 15);
+    --muted-foreground: oklch(0.65 0.02 15);
+    --accent: oklch(0.28 0.025 20);
+    --accent-foreground: oklch(0.6 0.2 25);
+    --destructive: oklch(0.5 0.2 25);
+    --destructive-foreground: oklch(0.95 0.005 15);
+    --border: oklch(0.28 0.02 15);
+    --input: oklch(0.28 0.02 15);
+    --ring: oklch(0.6 0.2 25);
+    --chart-1: oklch(0.6 0.2 25);
+    --chart-2: oklch(0.65 0.18 35);
+    --chart-3: oklch(0.55 0.15 20);
+    --chart-4: oklch(0.7 0.15 45);
+    --chart-5: oklch(0.58 0.2 30);
+    --sidebar-background: oklch(0.18 0.015 15);
+    --sidebar-foreground: oklch(0.95 0.005 15);
+    --sidebar-primary: oklch(0.6 0.2 25);
+    --sidebar-primary-foreground: oklch(0.95 0.005 15);
+    --sidebar-accent: oklch(0.28 0.025 20);
+    --sidebar-accent-foreground: oklch(0.6 0.2 25);
+    --sidebar-border: oklch(0.28 0.02 15);
+    --sidebar-ring: oklch(0.6 0.2 25);
+  }
+
+  /* MapLibre popup styles */
+  .maplibregl-popup-content {
+    @apply bg-transparent !important;
+    @apply shadow-none !important;
+    @apply p-0 !important;
+    @apply rounded-none !important;
+  }
+  .maplibregl-popup-tip {
+    @apply hidden !important;
+  }
+
+  /* Leaflet styles */
+  .leaflet-container {
+    background-color: var(--card) !important;
+    font-family: inherit !important;
+  }
+  .leaflet-container a {
+    color: inherit !important;
+  }
+  .leaflet-div-icon {
+    background: transparent !important;
+    border: none !important;
+  }
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-content,
+  .leaflet-popup-content p {
+    all: unset !important;
+  }
+  .leaflet-popup {
+    animation: none !important;
+  }
+  .leaflet-popup-close-button {
+    @apply ring-offset-background focus:ring-ring bg-secondary rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:outline-none;
+  }
+  .leaflet-tooltip,
+  .leaflet-draw-tooltip {
+    background-color: var(--foreground) !important;
+    color: var(--background) !important;
+    animation: none !important;
+    border-radius: 0.375rem !important;
+    border: none !important;
+    padding: 0.375rem 0.75rem !important;
+    box-shadow: none !important;
+  }
+  .leaflet-draw-tooltip:before {
+    background-color: var(--foreground);
+    top: 50% !important;
+    right: 2px !important;
+    width: 0.625rem;
+    height: 0.625rem;
+    transform: translateX(50%) translateY(-50%) rotate(45deg);
+    border-radius: 2px;
+    border: none !important;
+  }
+  .leaflet-error-draw-tooltip {
+    background-color: var(--destructive) !important;
+    color: white !important;
+  }
+  .leaflet-error-draw-tooltip:before {
+    background-color: var(--destructive);
+  }
+  .leaflet-draw-tooltip-subtext {
+    color: var(--background) !important;
+  }
+  .leaflet-popup-tip-container,
+  .leaflet-tooltip-top:before,
+  .leaflet-tooltip-bottom:before,
+  .leaflet-tooltip-left:before,
+  .leaflet-tooltip-right:before {
+    display: none;
+  }
+  .leaflet-control-attribution {
+    background-color: var(--muted) !important;
+    border-radius: 0.375rem;
+    padding: 2px 4px !important;
+    font-size: 10px;
+    line-height: 1 !important;
+    color: inherit !important;
+  }
+  .leaflet-draw-guide-dash {
+    border-radius: 9999px;
+  }
+  .leaflet-edit-marker-selected {
+    border-color: transparent !important;
+    background: transparent !important;
+  }
+  .marker-cluster div {
+    font-family: inherit;
   }
 }
 
@@ -78,6 +175,25 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground m-0;
+    font-family:
+      "Funnel Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      "Roboto",
+      "Oxygen",
+      "Ubuntu",
+      "Cantarell",
+      "Fira Sans",
+      "Droid Sans",
+      "Helvetica Neue",
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  code {
+    font-family:
+      source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
   }
 }

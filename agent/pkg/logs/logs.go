@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -90,7 +91,8 @@ func readLogFile(filePath string, position int64) (LogResult, error) {
 		return LogResult{}, err
 	}
 
-	var logs []string
+	// PERFORMANCE FIX: Pre-allocate slice with estimated capacity
+	logs := make([]string, 0, 1000)
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024) // Handle larger lines
 
@@ -118,6 +120,7 @@ func readLogFile(filePath string, position int64) (LogResult, error) {
 }
 
 // tailLogFile reads the last N lines from a file
+// PERFORMANCE FIX: Avoid O(n²) prepending by collecting in reverse order and reversing once
 func tailLogFile(filePath string, numLines int) (LogResult, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -131,9 +134,9 @@ func tailLogFile(filePath string, numLines int) (LogResult, error) {
 	}
 
 	fileSize := fileInfo.Size()
-	
-	// Start reading from the end
-	var logs []string
+
+	// Pre-allocate slice with capacity to avoid reallocations
+	logs := make([]string, 0, numLines)
 	var offset int64 = 0
 	bufferSize := int64(8192)
 
@@ -143,7 +146,7 @@ func tailLogFile(filePath string, numLines int) (LogResult, error) {
 		if offset+bufferSize > fileSize {
 			readSize = fileSize - offset
 		}
-		
+
 		startPos := fileSize - offset - readSize
 		if startPos < 0 {
 			startPos = 0
@@ -159,11 +162,12 @@ func tailLogFile(filePath string, numLines int) (LogResult, error) {
 
 		// Split into lines (reading backwards)
 		lines := strings.Split(string(buffer), "\n")
-		
-		// Add lines in reverse order
+
+		// PERFORMANCE FIX: Collect lines in reverse order, then reverse once at the end
+		// instead of prepending each line (which causes O(n²) allocations)
 		for i := len(lines) - 1; i >= 0; i-- {
 			if lines[i] != "" {
-				logs = append([]string{lines[i]}, logs...)
+				logs = append(logs, lines[i])
 				if len(logs) >= numLines {
 					break
 				}
@@ -174,6 +178,11 @@ func tailLogFile(filePath string, numLines int) (LogResult, error) {
 		if startPos == 0 {
 			break
 		}
+	}
+
+	// Reverse the slice once (O(n) instead of O(n²))
+	for i, j := 0, len(logs)-1; i < j; i, j = i+1, j-1 {
+		logs[i], logs[j] = logs[j], logs[i]
 	}
 
 	// Trim to exact number of lines requested
@@ -205,7 +214,8 @@ func GetRecentLogs(path string, since time.Time) (LogResult, error) {
 	}
 
 	// Filter logs by timestamp (assuming JSON logs with time field)
-	var filteredLogs []string
+	// PERFORMANCE FIX: Pre-allocate with estimated capacity
+	filteredLogs := make([]string, 0, len(result.Logs))
 	for _, logLine := range result.Logs {
 		if strings.Contains(logLine, "\"time\":") || strings.Contains(logLine, "\"StartUTC\":") {
 			// Try to extract timestamp and compare
@@ -224,7 +234,8 @@ func GetRecentDirectoryLogs(dirPath string, since time.Time) (LogResult, error) 
 		return LogResult{}, fmt.Errorf("failed to read directory: %w", err)
 	}
 
-	var allLogs []string
+	// PERFORMANCE FIX: Pre-allocate with estimated capacity
+	allLogs := make([]string, 0, 1000)
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -334,14 +345,8 @@ func GetDirectoryLogs(dirPath string, positions []Position, isErrorLog bool, inc
 		}
 	}
 
-	// Sort files by name (usually includes timestamp)
-	for i := 0; i < len(logFiles)-1; i++ {
-		for j := i + 1; j < len(logFiles); j++ {
-			if logFiles[i] > logFiles[j] {
-				logFiles[i], logFiles[j] = logFiles[j], logFiles[i]
-			}
-		}
-	}
+	// PERFORMANCE FIX: Use sort.Strings (O(n log n)) instead of bubble sort (O(n²))
+	sort.Strings(logFiles)
 
 	if len(logFiles) == 0 {
 		return LogResult{Logs: []string{}, Positions: []Position{}}, nil
@@ -354,8 +359,9 @@ func GetDirectoryLogs(dirPath string, positions []Position, isErrorLog bool, inc
 		}
 	}
 
-	var allLogs []string
-	var newPositions []Position
+	// PERFORMANCE FIX: Pre-allocate slices with estimated capacity
+	allLogs := make([]string, 0, 1000)
+	newPositions := make([]Position, 0, len(logFiles))
 
 	// If no positions provided, read last file with tail mode
 	if len(positions) == 0 && len(logFiles) > 0 {

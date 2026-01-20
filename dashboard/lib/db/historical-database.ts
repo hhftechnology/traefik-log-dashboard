@@ -105,15 +105,26 @@ export function getHistoricalConfig(): HistoricalConfig {
   const db = getHistoricalDatabase();
   const row = db.prepare(`
     SELECT * FROM historical_config WHERE id = 1
-  `).get() as any;
+  `).get() as Record<string, unknown> | undefined;
+
+  if (!row) {
+    return {
+      enabled: false,
+      retention_days: 30,
+      archive_interval: 60,
+      db_path: '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
 
   return {
     enabled: Boolean(row.enabled),
-    retention_days: row.retention_days,
-    archive_interval: row.archive_interval,
-    db_path: row.db_path,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    retention_days: row.retention_days as number,
+    archive_interval: row.archive_interval as number,
+    db_path: row.db_path as string,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
   };
 }
 
@@ -124,7 +135,7 @@ export function updateHistoricalConfig(updates: Partial<HistoricalConfig>): void
   const db = getHistoricalDatabase();
 
   const sets: string[] = [];
-  const values: any[] = [];
+  const values: unknown[] = [];
 
   if (updates.enabled !== undefined) {
     sets.push('enabled = ?');
@@ -208,28 +219,32 @@ export function addHistoricalData(
     topIps, topLocations, topRoutes, topStatusCodes, topRouters, topServices
   );
 
-  const row = db.prepare(`SELECT * FROM historical_data WHERE id = ?`).get(id) as any;
+  const row = db.prepare(`SELECT * FROM historical_data WHERE id = ?`).get(id) as Record<string, unknown> | undefined;
+
+  if (!row) {
+    throw new Error('Failed to retrieve inserted historical data');
+  }
 
   return {
-    id: row.id,
-    agent_id: row.agent_id,
-    timestamp: row.timestamp,
-    total_requests: row.total_requests,
-    error_rate: row.error_rate,
-    avg_response_time: row.avg_response_time,
-    p95_response_time: row.p95_response_time,
-    p99_response_time: row.p99_response_time,
-    status_2xx: row.status_2xx,
-    status_3xx: row.status_3xx,
-    status_4xx: row.status_4xx,
-    status_5xx: row.status_5xx,
-    top_ips: row.top_ips,
-    top_locations: row.top_locations,
-    top_routes: row.top_routes,
-    top_status_codes: row.top_status_codes,
-    top_routers: row.top_routers,
-    top_services: row.top_services,
-    created_at: row.created_at,
+    id: row.id as string,
+    agent_id: row.agent_id as string,
+    timestamp: row.timestamp as string,
+    total_requests: row.total_requests as number,
+    error_rate: row.error_rate as number,
+    avg_response_time: row.avg_response_time as number,
+    p95_response_time: row.p95_response_time as number,
+    p99_response_time: row.p99_response_time as number,
+    status_2xx: row.status_2xx as number,
+    status_3xx: row.status_3xx as number,
+    status_4xx: row.status_4xx as number,
+    status_5xx: row.status_5xx as number,
+    top_ips: row.top_ips as string,
+    top_locations: row.top_locations as string,
+    top_routes: row.top_routes as string,
+    top_status_codes: row.top_status_codes as string,
+    top_routers: row.top_routers as string,
+    top_services: row.top_services as string,
+    created_at: row.created_at as string,
   };
 }
 
@@ -240,7 +255,7 @@ export function queryHistoricalData(query: HistoricalDataQuery): HistoricalMetri
   const db = getHistoricalDatabase();
 
   let sql = 'SELECT * FROM historical_data WHERE 1=1';
-  const params: any[] = [];
+  const params: unknown[] = [];
 
   if (query.agent_id) {
     sql += ' AND agent_id = ?';
@@ -269,25 +284,25 @@ export function queryHistoricalData(query: HistoricalDataQuery): HistoricalMetri
     params.push(query.offset);
   }
 
-  const rows = db.prepare(sql).all(...params) as any[];
+  const rows = db.prepare(sql).all(...params) as Array<Record<string, unknown>>;
 
   return rows.map(row => ({
-    timestamp: row.timestamp,
-    total_requests: row.total_requests,
-    error_rate: row.error_rate,
-    avg_response_time: row.avg_response_time,
-    p95_response_time: row.p95_response_time,
-    p99_response_time: row.p99_response_time,
-    status_2xx: row.status_2xx,
-    status_3xx: row.status_3xx,
-    status_4xx: row.status_4xx,
-    status_5xx: row.status_5xx,
-    top_ips: row.top_ips ? JSON.parse(row.top_ips) : undefined,
-    top_locations: row.top_locations ? JSON.parse(row.top_locations) : undefined,
-    top_routes: row.top_routes ? JSON.parse(row.top_routes) : undefined,
-    top_status_codes: row.top_status_codes ? JSON.parse(row.top_status_codes) : undefined,
-    top_routers: row.top_routers ? JSON.parse(row.top_routers) : undefined,
-    top_services: row.top_services ? JSON.parse(row.top_services) : undefined,
+    timestamp: row.timestamp as string,
+    total_requests: row.total_requests as number,
+    error_rate: row.error_rate as number,
+    avg_response_time: row.avg_response_time as number,
+    p95_response_time: row.p95_response_time as number,
+    p99_response_time: row.p99_response_time as number,
+    status_2xx: row.status_2xx as number,
+    status_3xx: row.status_3xx as number,
+    status_4xx: row.status_4xx as number,
+    status_5xx: row.status_5xx as number,
+    top_ips: row.top_ips ? JSON.parse(row.top_ips as string) : undefined,
+    top_locations: row.top_locations ? JSON.parse(row.top_locations as string) : undefined,
+    top_routes: row.top_routes ? JSON.parse(row.top_routes as string) : undefined,
+    top_status_codes: row.top_status_codes ? JSON.parse(row.top_status_codes as string) : undefined,
+    top_routers: row.top_routers ? JSON.parse(row.top_routers as string) : undefined,
+    top_services: row.top_services ? JSON.parse(row.top_services as string) : undefined,
   }));
 }
 
@@ -303,14 +318,23 @@ export function getHistoricalStats(agentId?: string): {
   const db = getHistoricalDatabase();
 
   let sql = 'SELECT COUNT(*) as count, MIN(timestamp) as oldest, MAX(timestamp) as newest FROM historical_data';
-  const params: any[] = [];
+  const params: unknown[] = [];
 
   if (agentId) {
     sql += ' WHERE agent_id = ?';
     params.push(agentId);
   }
 
-  const result = db.prepare(sql).get(...params) as any;
+  const result = db.prepare(sql).get(...params) as Record<string, unknown> | undefined;
+  
+  if (!result) {
+    return {
+      total_entries: 0,
+      oldest_entry: null,
+      newest_entry: null,
+      db_size_bytes: 0,
+    };
+  }
 
   // Get database file size
   let dbSize = 0;
@@ -322,9 +346,9 @@ export function getHistoricalStats(agentId?: string): {
   }
 
   return {
-    total_entries: result.count || 0,
-    oldest_entry: result.oldest || null,
-    newest_entry: result.newest || null,
+    total_entries: (result.count as number) || 0,
+    oldest_entry: (result.oldest as string) || null,
+    newest_entry: (result.newest as string) || null,
     db_size_bytes: dbSize,
   };
 }

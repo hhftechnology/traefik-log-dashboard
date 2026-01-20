@@ -1,0 +1,112 @@
+---
+title: Notifications
+description: Set up alerts and notifications
+---
+
+## Setting Up Discord Webhooks
+
+### Step 1: Create Discord Webhook
+1. Go to your Discord server
+2. Right-click on a channel → **Edit Channel**
+3. Go to **Integrations** → **Webhooks**
+4. Click **New Webhook**
+5. Copy the webhook URL
+
+### Step 2: Add to Dashboard
+1. Navigate to **Settings** → **Alerts** in your dashboard
+2. Click **Webhooks** tab
+3. Click **Add Webhook**
+4. Or use API directly:
+
+```bash
+curl -X POST http://localhost:3000/api/webhooks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Discord Channel",
+    "type": "discord",
+    "url": "https://discord.com/api/webhooks/YOUR_WEBHOOK_URL",
+    "description": "Production alerts",
+    "enabled": true
+  }'
+```
+
+### Step 3: Test Webhook
+```bash
+curl -X POST http://localhost:3000/api/webhooks/test \
+  -H "Content-Type: application/json" \
+  -d '{"webhook_id": "webhook-xxx"}'
+```
+
+You should see a test message appear in your Discord channel!
+
+## Setting Up Telegram Webhooks
+
+### Step 1: Create Telegram Bot
+1. Message [@BotFather](https://t.me/botfather) on Telegram
+2. Send `/newbot` and follow instructions
+3. Copy the bot token
+
+### Step 2: Get Chat ID
+1. Add your bot to a channel or group
+2. Send a test message in that channel
+3. Visit: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
+4. Find the `chat.id` in the response
+
+### Step 3: Create Webhook URL
+Format: `https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>`
+
+### Step 4: Add to Dashboard
+```bash
+curl -X POST http://localhost:3000/api/webhooks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Telegram Alerts",
+    "type": "telegram",
+    "url": "https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>",
+    "description": "Team notifications",
+    "enabled": true
+  }'
+```
+
+## Creating Alert Rules
+
+### Example 1: Hourly Traffic Summary
+
+```bash
+curl -X POST http://localhost:3000/api/alerts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Hourly Traffic Summary",
+    "description": "Overview of traffic every hour",
+    "enabled": true,
+    "trigger_type": "interval",
+    "interval": "1h",
+    "webhook_ids": ["webhook-xxx"],
+    "parameters": [
+      {"parameter": "request_count", "enabled": true},
+      {"parameter": "error_rate", "enabled": true},
+      {"parameter": "response_time", "enabled": true},
+      {"parameter": "top_ips", "enabled": true, "limit": 5},
+      {"parameter": "top_locations", "enabled": true, "limit": 5}
+    ]
+  }'
+```
+
+### Example 2: High Error Rate Alert
+
+```bash
+curl -X POST http://localhost:3000/api/alerts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "High Error Rate",
+    "description": "Alert when error rate exceeds threshold",
+    "enabled": true,
+    "trigger_type": "threshold",
+    "webhook_ids": ["webhook-xxx"],
+    "parameters": [
+      {"parameter": "error_rate", "enabled": true, "threshold": 5.0},
+      {"parameter": "top_status_codes", "enabled": true, "limit": 5},
+      {"parameter": "top_routes", "enabled": true, "limit": 5}
+    ]
+  }'
+```

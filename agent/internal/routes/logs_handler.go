@@ -11,12 +11,6 @@ import (
 
 // HandleAccessLogs handles requests for access logs
 func (h *Handler) HandleAccessLogs(w http.ResponseWriter, r *http.Request) {
-	utils.EnableCORS(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	// Get query parameters
 	position := utils.GetQueryParamInt64(r, "position", -2) // -2 means use tracked position
 	lines := utils.GetQueryParamInt(r, "lines", 1000)
@@ -85,12 +79,6 @@ func (h *Handler) HandleAccessLogs(w http.ResponseWriter, r *http.Request) {
 
 // HandleErrorLogs handles requests for error logs
 func (h *Handler) HandleErrorLogs(w http.ResponseWriter, r *http.Request) {
-	utils.EnableCORS(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	position := utils.GetQueryParamInt64(r, "position", -2)
 	lines := utils.GetQueryParamInt(r, "lines", 100)
 	tail := utils.GetQueryParamBool(r, "tail", false)
@@ -146,12 +134,6 @@ func (h *Handler) HandleErrorLogs(w http.ResponseWriter, r *http.Request) {
 
 // HandleGetLog handles requests for a specific log file
 func (h *Handler) HandleGetLog(w http.ResponseWriter, r *http.Request) {
-	utils.EnableCORS(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	filename := utils.GetQueryParam(r, "filename", "")
 	if filename == "" {
 		utils.RespondError(w, http.StatusBadRequest, "filename parameter is required")

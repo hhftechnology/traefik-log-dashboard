@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getNotificationHistory } from '@/lib/db/database';
 
 export const dynamic = 'force-dynamic';

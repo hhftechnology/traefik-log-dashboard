@@ -6,9 +6,10 @@
 
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { Agent } from '../types/agent';
 import { toast } from 'sonner';
+import { buildUrl } from '../utils/base-url';
 
 interface AgentContextType {
   agents: Agent[];
@@ -31,7 +32,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   // Fetch all agents
   const fetchAgents = useCallback(async () => {
     try {
-      const response = await fetch('/api/agents');
+      const response = await fetch(buildUrl('/api/agents'));
       if (!response.ok) throw new Error('Failed to fetch agents');
       
       const data = await response.json();
@@ -49,7 +50,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   // Fetch selected agent - FIXED: Removed agents dependency
   const fetchSelectedAgent = useCallback(async () => {
     try {
-      const response = await fetch('/api/agents/selected');
+      const response = await fetch(buildUrl('/api/agents/selected'));
       if (response.ok) {
         const data = await response.json();
         setSelectedAgent(data.agent);
@@ -91,7 +92,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   // Select agent
   const selectAgent = useCallback(async (id: string) => {
     try {
-      const response = await fetch('/api/agents/selected', {
+      const response = await fetch(buildUrl('/api/agents/selected'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ agentId: id }),
@@ -119,7 +120,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   // Add agent
   const addAgent = useCallback(async (agent: Omit<Agent, 'id' | 'number'>): Promise<Agent> => {
     try {
-      const response = await fetch('/api/agents', {
+      const response = await fetch(buildUrl('/api/agents'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(agent),
@@ -149,7 +150,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   // Update agent
   const updateAgent = useCallback(async (id: string, updates: Partial<Agent>) => {
     try {
-      const response = await fetch('/api/agents', {
+      const response = await fetch(buildUrl('/api/agents'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, ...updates }),
@@ -185,7 +186,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   // FIXED: Enhanced delete agent with better error messages
   const deleteAgent = useCallback(async (id: string) => {
     try {
-      const response = await fetch(`/api/agents?id=${id}`, {
+      const response = await fetch(buildUrl(`/api/agents?id=${id}`), {
         method: 'DELETE',
       });
 
@@ -236,49 +237,84 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     }
   }, [agents, selectedAgent, selectAgent]);
 
-  // Check agent status
+  // REFACTORED: Check agent status with race condition prevention
   const checkAgentStatus = useCallback(async (id: string): Promise<boolean> => {
     const agent = agents.find(a => a.id === id);
-    if (!agent) return false;
-
-    // Update status to checking
-    await updateAgent(id, { status: 'checking' });
+    if (!agent) {
+      console.warn(`Agent ${id} not found for status check`);
+      return false;
+    }
 
     try {
-      const response = await fetch('/api/agents/check-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentUrl: agent.url, agentToken: agent.token }),
+      // OPTIMIZATION: Set checking status optimistically without await
+      // This prevents blocking and reduces race conditions
+      updateAgent(id, { status: 'checking' }).catch(err => {
+        console.error('Failed to update checking status:', err);
       });
 
-      const data = await response.json();
-      const isOnline = response.ok && data.online;
+      // FIXED: Add timeout to prevent hanging
+      // MEMORY LEAK FIX: AbortController already implemented
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-      await updateAgent(id, {
-        status: isOnline ? 'online' : 'offline',
-        lastSeen: isOnline ? new Date() : undefined,
-      });
+      try {
+        const response = await fetch(buildUrl('/api/agents/check-status'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentUrl: agent.url, agentToken: agent.token }),
+          signal: controller.signal,
+        });
 
-      return isOnline;
+        clearTimeout(timeoutId);
+
+        const data = await response.json();
+        const isOnline = response.ok && data.online;
+
+        // FIXED: Single state update instead of multiple sequential updates
+        await updateAgent(id, {
+          status: isOnline ? 'online' : 'offline',
+          lastSeen: isOnline ? new Date() : undefined,
+        });
+
+        return isOnline;
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
+      }
     } catch (error) {
-      await updateAgent(id, { status: 'offline' });
+      // IMPROVED: Better error logging and handling
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.warn(`Agent ${id} status check timeout`);
+      } else {
+        console.error(`Agent ${id} status check failed:`, error);
+      }
+
+      // Non-blocking status update
+      updateAgent(id, { status: 'offline' }).catch(err => {
+        console.error('Failed to update offline status:', err);
+      });
+
       return false;
     }
   }, [agents, updateAgent]);
 
+  // PERFORMANCE FIX: Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(
+    () => ({
+      agents,
+      selectedAgent,
+      selectAgent,
+      addAgent,
+      updateAgent,
+      deleteAgent,
+      refreshAgents,
+      checkAgentStatus,
+    }),
+    [agents, selectedAgent, selectAgent, addAgent, updateAgent, deleteAgent, refreshAgents, checkAgentStatus]
+  );
+
   return (
-    <AgentContext.Provider
-      value={{
-        agents,
-        selectedAgent,
-        selectAgent,
-        addAgent,
-        updateAgent,
-        deleteAgent,
-        refreshAgents,
-        checkAgentStatus,
-      }}
-    >
+    <AgentContext.Provider value={contextValue}>
       {children}
     </AgentContext.Provider>
   );

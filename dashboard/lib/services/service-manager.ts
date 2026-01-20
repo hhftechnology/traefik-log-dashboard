@@ -34,18 +34,24 @@ export class ServiceManager {
    */
   initialize(): void {
     if (this.initialized) {
-      console.log('Services already initialized');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Services already initialized');
+      }
       return;
     }
 
     try {
-      console.log('Initializing Traefik Log Dashboard Services...');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Initializing Traefik Log Dashboard Services...');
+      }
 
       // Start archival service
       archivalService.start();
 
       this.initialized = true;
-      console.log('✓ All services initialized successfully');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('✓ All services initialized successfully');
+      }
     } catch (error) {
       console.error('Failed to initialize services:', error);
       throw error;
@@ -61,13 +67,17 @@ export class ServiceManager {
     }
 
     try {
-      console.log('Shutting down services...');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Shutting down services...');
+      }
 
       // Stop archival service
       archivalService.stop();
 
       this.initialized = false;
-      console.log('✓ All services shut down successfully');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('✓ All services shut down successfully');
+      }
     } catch (error) {
       console.error('Error during shutdown:', error);
     }
@@ -148,7 +158,9 @@ export const serviceManager = ServiceManager.getInstance();
 if (typeof window === 'undefined') {
   try {
     serviceManager.initialize();
-    console.log('Service Manager auto-initialized');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Service Manager auto-initialized');
+    }
   } catch (error) {
     console.error('Failed to auto-initialize services:', error);
   }

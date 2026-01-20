@@ -1,59 +1,16 @@
-// dashboard/app/dashboard/demo/page.tsx
-'use client';
+import { notFound } from 'next/navigation';
+import DemoDashboardClient from './DemoDashboardClient';
 
-import { useEffect, useState } from 'react';
-import DashboardWithFilters from '@/components/dashboard/DashboardWithFilters';
-import Header from '@/components/ui/Header';
-import { generateTimeSeriesLogs } from '@/lib/demo';
-import { TraefikLog } from '@/lib/types';
+export const dynamic = 'force-dynamic';
 
 export default function DemoDashboardPage() {
-  const [logs, setLogs] = useState<TraefikLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const showDemoPage =
+    (process.env.NEXT_PUBLIC_SHOW_DEMO_PAGE ?? process.env.SHOW_DEMO_PAGE ?? 'true') !== 'false';
 
-  useEffect(() => {
-    const initialLogs = generateTimeSeriesLogs(60, 10);
-    setLogs(initialLogs);
-    setLoading(false);
-
-    const interval = setInterval(() => {
-      setLogs(prevLogs => {
-        const newLogs = generateTimeSeriesLogs(1, 10);
-        const updatedLogs = [...newLogs, ...prevLogs].slice(0, 1000);
-        setLastUpdate(new Date());
-        return updatedLogs;
-      });
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50">
-        <Header title="TRAEFIK LOG DASHBOARD - Demo Mode" connected={true} demoMode={true} />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading demo dashboard...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  if (!showDemoPage) {
+    // Hide demo route completely when disabled
+    return notFound();
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50">
-      <Header
-        title="TRAEFIK LOG DASHBOARD - Demo Mode"
-        connected={true}
-        demoMode={true}
-        lastUpdate={lastUpdate}
-      />
-      <DashboardWithFilters logs={logs} demoMode={true} /> 
-    </div>
-  );
+  return <DemoDashboardClient />;
 }

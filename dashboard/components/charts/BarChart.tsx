@@ -1,69 +1,107 @@
 'use client';
 
-import { useRef } from 'react';
+import React from 'react';
 import {
-	Chart as ChartJS,
-	CategoryScale,
-	LinearScale,
-	BarElement,
-	Title,
-	Tooltip,
-	Legend,
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+  Bar,
+  BarChart as RechartsBarChart,
+  ResponsiveContainer,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Legend,
+} from 'recharts';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+interface Dataset {
+  label: string;
+  data: number[];
+  backgroundColor?: string | string[];
+  borderColor?: string | string[];
+  borderWidth?: number;
+}
 
 interface BarChartProps {
-	labels: string[];
-	datasets: {
-		label: string;
-		data: number[];
-		backgroundColor?: string | string[];
-		borderColor?: string | string[];
-		borderWidth?: number;
-	}[];
-	height?: number;
+  labels: string[];
+  datasets: Dataset[];
+  height?: number;
 }
 
-export default function BarChart({ labels, datasets, height = 300 }: BarChartProps) {
-	const chartRef = useRef<ChartJS<'bar'>>(null);
+function BarChart({ labels, datasets, height = 300 }: BarChartProps) {
+  // Transform data to Recharts format
+  const chartData = labels.map((label, index) => {
+    const point: Record<string, string | number> = { name: label };
+    datasets.forEach(dataset => {
+      point[dataset.label] = dataset.data[index] || 0;
+    });
+    return point;
+  });
 
-	const chartData = { labels, datasets };
+  // Default colors using CSS variables
+  const defaultColors = [
+    'var(--primary)',
+    'var(--chart-2)',
+    'var(--chart-3)',
+    'var(--chart-4)',
+    'var(--chart-5)',
+  ];
 
-	const grid = `hsla(${getComputedStyleSafe('--muted-foreground', '0 0 0')} / 0.1)`;
-	const tooltipBg = 'rgba(0, 0, 0, 0.8)';
+  return (
+    <div style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <RechartsBarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <CartesianGrid
+            strokeDasharray="3 3"
+            stroke="var(--border)"
+            vertical={false}
+          />
+          <XAxis
+            dataKey="name"
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+            tickMargin={8}
+          />
+          <YAxis
+            axisLine={false}
+            tickLine={false}
+            tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+            tickMargin={8}
+            allowDecimals={false}
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: 'var(--background)',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            }}
+            labelStyle={{ color: 'var(--foreground)', fontWeight: 500 }}
+            cursor={{ fill: 'var(--muted)' }}
+          />
+          {datasets.length > 1 && (
+            <Legend
+              wrapperStyle={{ paddingTop: 20 }}
+              iconType="circle"
+            />
+          )}
+          {datasets.map((dataset, idx) => {
+            const fill = Array.isArray(dataset.backgroundColor)
+              ? dataset.backgroundColor[0]
+              : dataset.backgroundColor || defaultColors[idx % defaultColors.length];
 
-	const options = {
-		responsive: true,
-		maintainAspectRatio: false,
-		plugins: {
-			legend: { display: datasets.length > 1, position: 'top' as const },
-			tooltip: {
-				backgroundColor: tooltipBg,
-				padding: 12,
-				titleColor: '#fff',
-				bodyColor: '#fff',
-				borderColor: 'rgba(255, 255, 255, 0.1)',
-				borderWidth: 1,
-			},
-		},
-		scales: {
-			x: { grid: { display: false } },
-			y: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } },
-		},
-	};
-
-	return (
-		<div style={{ height }}>
-			<Bar ref={chartRef} data={chartData} options={options} />
-		</div>
-	);
+            return (
+              <Bar
+                key={dataset.label}
+                dataKey={dataset.label}
+                fill={fill}
+                radius={[4, 4, 0, 0]}
+              />
+            );
+          })}
+        </RechartsBarChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
 
-function getComputedStyleSafe(variableName: string, fallbackHsl: string): string {
-	if (typeof window === 'undefined') return fallbackHsl;
-	const root = getComputedStyle(document.documentElement);
-	const value = root.getPropertyValue(variableName).trim();
-	return value || fallbackHsl;
-}
+export default React.memo(BarChart);

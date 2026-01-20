@@ -59,6 +59,7 @@ export interface SystemStats {
   disk: DiskStats;
   uptime?: number;
   timestamp?: string;
+  [key: string]: unknown; // Allow additional properties from agent
 }
 
 export interface CPUStats {
@@ -280,5 +281,5 @@ export interface ChartProps {
   data: ChartData;
   height?: number;
   loading?: boolean;
-  options?: any;
+  options?: Record<string, unknown>;
 }

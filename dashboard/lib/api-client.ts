@@ -4,16 +4,21 @@ import {
   LogSizesResponse,
   StatusResponse,
 } from './types';
+import { getBaseOrigin, withBasePath } from './utils/base-url';
 
 export class APIClient {
-  private baseURL: string;
+  private baseOrigin: string;
   private authToken?: string;
 
   constructor(baseURL?: string, authToken?: string) {
-    // Default to empty string to use relative URLs (dashboard's own API routes)
-    // The dashboard's API routes will then proxy to the agent
-    this.baseURL = baseURL || '';
+    // Default to empty string to use same-origin unless a base domain is provided
+    this.baseOrigin = (baseURL || getBaseOrigin()).replace(/\/$/, '');
     this.authToken = authToken;
+  }
+
+  private buildApiUrl(endpoint: string): string {
+    const path = withBasePath(endpoint);
+    return `${this.baseOrigin}${path}`;
   }
 
   private async fetch<T>(
@@ -32,21 +37,37 @@ export class APIClient {
       headers['Authorization'] = `Bearer ${this.authToken}`;
     }
 
+    const url = this.buildApiUrl(endpoint);
     // Add timestamp to prevent caching
-    const url = `${this.baseURL}${endpoint}${endpoint.includes('?') ? '&' : '?'}_t=${Date.now()}`;
+    const urlWithTimestamp = `${url}${url.includes('?') ? '&' : '?'}_t=${Date.now()}`;
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-      cache: 'no-store', // Prevent browser caching
-    });
+    // FIX: Add timeout to prevent infinite hanging
+    // Use provided signal or create a new AbortController with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`API Error: ${response.status} - ${error}`);
+    // Combine signals if one was provided
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => controller.abort());
     }
 
-    return response.json();
+    try {
+      const response = await fetch(urlWithTimestamp, {
+        ...options,
+        headers,
+        cache: 'no-store', // Prevent browser caching
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`API Error: ${response.status} - ${error}`);
+      }
+
+      return response.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 
   /**
@@ -61,13 +82,14 @@ export class APIClient {
    */
   async getAccessLogs(
     position: number = 0,
-    lines: number = 1000
+    lines: number = 1000,
+    options: { signal?: AbortSignal } = {}
   ): Promise<LogsResponse> {
     const params = new URLSearchParams({
       position: position.toString(),
       lines: lines.toString(),
     });
-    return this.fetch<LogsResponse>(`/api/logs/access?${params}`);
+    return this.fetch<LogsResponse>(`/api/logs/access?${params}`, { signal: options.signal });
   }
 
   /**
@@ -137,11 +159,12 @@ export class APIClient {
    * Set base URL
    */
   setBaseURL(url: string) {
-    this.baseURL = url;
+    this.baseOrigin = url.replace(/\/$/, '');
   }
 
   /**
- * Lookup locations for IP addresses
+ * Lookup locations for IP addresses using Dashboard's local GeoIP database
+ * REFACTOR: Changed from calling agent to using local dashboard endpoint
  */
 async lookupLocations(ips: string[]): Promise<{
   locations: Array<{
@@ -151,12 +174,30 @@ async lookupLocations(ips: string[]): Promise<{
     latitude?: number;
     longitude?: number;
   }>;
-  count: number;
+  count?: number;
 }> {
-  return this.fetch('/api/location/lookup', {
-    method: 'POST',
-    body: JSON.stringify({ ips }),
-  });
+  // FIX: Add timeout to prevent infinite hanging
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+  try {
+    const response = await fetch(this.buildApiUrl('/api/location/lookup'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ips }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Location lookup failed: ${response.statusText}`);
+    }
+
+    return response.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /**

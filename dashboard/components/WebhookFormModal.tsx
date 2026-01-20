@@ -103,7 +103,7 @@ export default function WebhookFormModal({
     }
   };
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = (field: string, value: unknown) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     // Clear error for this field
     if (errors[field]) {
@@ -119,15 +119,15 @@ export default function WebhookFormModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-red-200">
+      <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-red-200 dark:border-red-800">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900">
+        <div className="flex items-center justify-between p-6 border-b border-border">
+          <h2 className="text-2xl font-bold text-foreground">
             {webhook ? 'Edit Webhook' : 'Add New Webhook'}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-red-600 transition-colors"
+            className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400 transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
@@ -137,27 +137,27 @@ export default function WebhookFormModal({
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Name <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Name <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={e => handleInputChange('name', e.target.value)}
               placeholder="e.g., Production Alerts"
-              className={`w-full px-3 py-2 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                errors.name ? 'border-red-500' : 'border-red-200'
+              className={`w-full px-3 py-2 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-card text-foreground ${
+                errors.name ? 'border-red-500 dark:border-red-400' : 'border-red-200 dark:border-red-800'
               }`}
             />
             {errors.name && (
-              <p className="mt-1 text-sm text-red-500">{errors.name}</p>
+              <p className="mt-1 text-sm text-red-500 dark:text-red-400">{errors.name}</p>
             )}
           </div>
 
           {/* Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Type <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Type <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <div className="flex gap-4">
               <label className="flex items-center cursor-pointer">
@@ -185,8 +185,8 @@ export default function WebhookFormModal({
 
           {/* URL */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Webhook URL <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Webhook URL <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             <input
               type="url"
@@ -197,14 +197,14 @@ export default function WebhookFormModal({
                   ? 'https://discord.com/api/webhooks/...'
                   : 'https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<CHAT_ID>'
               }
-              className={`w-full px-3 py-2 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 font-mono text-sm ${
-                errors.url ? 'border-red-500' : 'border-red-200'
+              className={`w-full px-3 py-2 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 font-mono text-sm bg-card text-foreground ${
+                errors.url ? 'border-red-500 dark:border-red-400' : 'border-red-200 dark:border-red-800'
               }`}
             />
             {errors.url && (
-              <p className="mt-1 text-sm text-red-500">{errors.url}</p>
+              <p className="mt-1 text-sm text-red-500 dark:text-red-400">{errors.url}</p>
             )}
-            <p className="mt-1 text-xs text-gray-500">
+            <p className="mt-1 text-xs text-muted-foreground">
               {formData.type === 'discord' ? (
                 <>
                   Go to Server Settings → Integrations → Webhooks → New Webhook
@@ -219,15 +219,15 @@ export default function WebhookFormModal({
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description <span className="text-gray-400">(optional)</span>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Description <span className="text-muted-foreground">(optional)</span>
             </label>
             <textarea
               value={formData.description}
               onChange={e => handleInputChange('description', e.target.value)}
               placeholder="e.g., Sends alerts to #production-alerts channel"
               rows={3}
-              className="w-full px-3 py-2 border-2 border-red-200 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border-2 border-red-200 dark:border-red-800 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-card text-foreground"
             />
           </div>
 
@@ -240,26 +240,26 @@ export default function WebhookFormModal({
               onChange={e => handleInputChange('enabled', e.target.checked)}
               className="mr-2 h-4 w-4 text-red-600 border-red-300 rounded focus:ring-red-500"
             />
-            <label htmlFor="enabled" className="text-sm font-medium text-gray-700">
+            <label htmlFor="enabled" className="text-sm font-medium text-foreground">
               Enable webhook immediately
             </label>
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
+          <div className="flex gap-3 pt-4 border-t border-border">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
               disabled={saving}
-              className="flex-1 border-2 border-red-200 hover:border-red-500"
+              className="flex-1 border-2 border-red-200 dark:border-red-800 hover:border-red-500 dark:hover:border-red-400"
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={saving}
-              className="flex-1 bg-red-600 hover:bg-red-700"
+              className="flex-1"
             >
               {saving ? 'Saving...' : webhook ? 'Update Webhook' : 'Create Webhook'}
             </Button>

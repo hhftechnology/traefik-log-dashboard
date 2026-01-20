@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { useFilters } from '@/lib/contexts/FilterContext';
 import { applyFilters, getActiveFilterSummary } from '@/lib/utils/filter-utils';
 import { TraefikLog } from '@/lib/types';
-import Dashboard from './Dashboard';
+import TabbedDashboard from './TabbedDashboard';
 import { Badge } from '@/components/ui/badge';
 import { Filter } from 'lucide-react';
 import Link from 'next/link';
@@ -83,7 +83,7 @@ export default function DashboardWithFilters({ logs, demoMode = false, agentId, 
       )}
 
       {/* Main Dashboard */}
-      <Dashboard logs={filteredLogs} demoMode={demoMode} agentId={agentId} agentName={agentName} />
+      <TabbedDashboard logs={filteredLogs} demoMode={demoMode} agentId={agentId} agentName={agentName} />
     </>
   );
 }

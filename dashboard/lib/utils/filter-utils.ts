@@ -2,31 +2,7 @@
 
 import { TraefikLog } from '../types';
 import { FilterSettings, FilterCondition } from '../types/filter';
-
-/**
- * Check if an IP is private
- */
-function isPrivateIP(ip: string): boolean {
-  const parts = ip.split('.');
-  if (parts.length !== 4) return false;
-
-  const first = parseInt(parts[0]);
-  const second = parseInt(parts[1]);
-
-  // 10.0.0.0/8
-  if (first === 10) return true;
-
-  // 172.16.0.0/12
-  if (first === 172 && second >= 16 && second <= 31) return true;
-
-  // 192.168.0.0/16
-  if (first === 192 && second === 168) return true;
-
-  // 127.0.0.0/8 (localhost)
-  if (first === 127) return true;
-
-  return false;
-}
+import { isPrivateIP } from './ip-utils';
 
 /**
  * Extract real IP from headers based on proxy settings
@@ -42,17 +18,17 @@ function getRealIP(log: TraefikLog, settings: FilterSettings): string {
   // Check proxy headers in order of precedence
   if (settings.proxySettings.enableCFHeaders) {
     // Cloudflare CF-Connecting-IP header
-    const cfIP = (log as any).request_CF_Connecting_IP;
+    const cfIP = (log as TraefikLog & { request_CF_Connecting_IP?: string }).request_CF_Connecting_IP;
     if (cfIP) return cfIP;
   }
 
   if (settings.proxySettings.enableXRealIP) {
-    const xRealIP = (log as any).request_X_Real_IP;
+    const xRealIP = (log as TraefikLog & { request_X_Real_IP?: string }).request_X_Real_IP;
     if (xRealIP) return xRealIP;
   }
 
   if (settings.proxySettings.enableXForwardedFor) {
-    const xForwardedFor = (log as any).request_X_Forwarded_For;
+    const xForwardedFor = (log as TraefikLog & { request_X_Forwarded_For?: string }).request_X_Forwarded_For;
     if (xForwardedFor) {
       // X-Forwarded-For can be a comma-separated list; take the first IP
       return xForwardedFor.split(',')[0].trim();
@@ -61,7 +37,7 @@ function getRealIP(log: TraefikLog, settings: FilterSettings): string {
 
   // Check custom headers
   for (const header of settings.proxySettings.customHeaders) {
-    const headerValue = (log as any)[`request_${header.replace(/-/g, '_')}`];
+    const headerValue = (log as TraefikLog & Record<string, unknown>)[`request_${header.replace(/-/g, '_')}`] as string | undefined;
     if (headerValue) return headerValue;
   }
 
@@ -71,10 +47,10 @@ function getRealIP(log: TraefikLog, settings: FilterSettings): string {
 /**
  * Check if a log entry matches a filter condition
  */
-function matchesCondition(log: any, condition: FilterCondition): boolean {
+function matchesCondition(log: TraefikLog, condition: FilterCondition): boolean {
   if (!condition.enabled) return false;
 
-  const fieldValue = String(log[condition.field] || '').toLowerCase();
+  const fieldValue = String((log as unknown as Record<string, unknown>)[condition.field] || '').toLowerCase();
   const conditionValue = condition.value.toLowerCase();
 
   switch (condition.operator) {

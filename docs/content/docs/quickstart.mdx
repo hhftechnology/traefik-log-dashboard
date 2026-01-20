@@ -1,0 +1,168 @@
+---
+title: Quick Start
+description: Get up and running with Traefik Log Dashboard
+---
+
+## Prerequisites
+
+- Docker and Docker Compose
+- Traefik configured with JSON access logs
+
+## Single Agent Setup
+
+### 1. Create directory structure
+
+```bash
+mkdir -p traefik-dashboard/data/{logs,positions,dashboard}
+cd traefik-dashboard
+```
+
+### 2. Create `docker-compose.yml`
+
+```yaml
+services:
+  # Traefik Log Dashboard Agent
+  traefik-agent:
+    image: hhftechnology/traefik-log-dashboard-agent:latest
+    container_name: traefik-log-dashboard-agent
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data/logs:/logs:ro
+      - ./data/positions:/data
+    environment:
+      # Log Paths
+      - TRAEFIK_LOG_DASHBOARD_ACCESS_PATH=/logs/access.log
+      - TRAEFIK_LOG_DASHBOARD_ERROR_PATH=/logs/traefik.log
+
+      # Authentication - REPLACE WITH YOUR TOKEN
+      - TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN=your-secret-token
+
+      # System Monitoring
+      - TRAEFIK_LOG_DASHBOARD_SYSTEM_MONITORING=true
+
+      # Log Format
+      - TRAEFIK_LOG_DASHBOARD_LOG_FORMAT=json
+
+      # Server Port
+      - PORT=5000
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/logs/status"]
+      interval: 2m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - traefik-network
+
+  # Traefik Log Dashboard - Next.js web UI
+  traefik-dashboard:
+    image: hhftechnology/traefik-log-dashboard:latest
+    container_name: traefik-log-dashboard
+    restart: unless-stopped
+    user: "1001:1001"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data/dashboard:/app/data
+    environment:
+      # Agent Configuration - REPLACE WITH YOUR TOKEN
+      - AGENT_API_URL=http://traefik-agent:5000
+      - AGENT_API_TOKEN=your-secret-token
+      - AGENT_NAME=Default Agent
+
+      # Node Environment
+      - NODE_ENV=production
+      - PORT=3000
+
+      # Display Configuration
+      - NEXT_PUBLIC_SHOW_DEMO_PAGE=true
+      - NEXT_PUBLIC_MAX_LOGS_DISPLAY=500
+    depends_on:
+      traefik-agent:
+        condition: service_healthy
+    networks:
+      - traefik-network
+
+networks:
+  traefik-network:
+    external: true
+```
+
+### 3. Generate secure authentication token
+
+```bash
+# Generate a strong token
+openssl rand -hex 32
+
+# Update both TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN and AGENT_API_TOKEN with this value
+```
+
+### 4. Start the services
+
+```bash
+# Create the network if it doesn't exist
+docker network create traefik-network 2>/dev/null || true
+
+# Start services
+docker compose up -d
+```
+
+### 5. Access the dashboard
+
+Open your browser to [http://localhost:3000](http://localhost:3000)
+
+## Traefik Configuration
+
+Configure Traefik to output JSON access logs:
+
+```yaml
+# traefik.yml
+accessLog:
+  filePath: "/logs/access.log"
+  format: json
+  bufferingSize: 100
+
+  fields:
+    defaultMode: keep
+    names:
+      ClientUsername: drop
+    headers:
+      defaultMode: keep
+      names:
+        Authorization: drop
+        Cookie: drop
+```
+
+## Multi-Agent Setup
+
+To monitor multiple Traefik instances:
+
+1. Deploy an agent alongside each Traefik instance
+2. Configure each agent with a unique authentication token
+3. Add agents via the Dashboard UI at `/settings/agents`
+
+```yaml
+# Example: Second agent for staging environment
+traefik-agent-staging:
+  image: hhftechnology/traefik-log-dashboard-agent:latest
+  environment:
+    - TRAEFIK_LOG_DASHBOARD_ACCESS_PATH=/logs/access.log
+    - TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN=staging-secret-token
+    - TRAEFIK_LOG_DASHBOARD_SYSTEM_MONITORING=true
+  volumes:
+    - /var/log/traefik-staging:/logs:ro
+```
+
+## GeoIP (Geographic Location)
+
+Geographic IP lookup is automatically enabled in the dashboard. The dashboard uses [geolite2-redist](https://www.npmjs.com/package/geolite2-redist) which auto-downloads MaxMind GeoLite2 databases.
+
+No additional configuration is required for GeoIP functionality.
+
+## Next Steps
+
+- [Configuration](/docs/configuration) - Detailed configuration options
+- [Features](/docs/features) - Explore all dashboard features
+- [Troubleshooting](/docs/troubleshooting) - Common issues and solutions

@@ -25,7 +25,7 @@ import {
 
 export default function FilterSettingsPage() {
   const { settings, updateSettings, resetSettings, addCustomCondition, removeCustomCondition, updateCustomCondition } = useFilters();
-  
+
   const [newIP, setNewIP] = useState('');
   const [newStatusCode, setNewStatusCode] = useState('');
   const [newPath, setNewPath] = useState('');
@@ -207,9 +207,9 @@ export default function FilterSettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="bg-white border-b border-red-200">
+      <div className="bg-card border-b border-border">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -219,18 +219,18 @@ export default function FilterSettingsPage() {
                 </Link>
               </Button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <Filter className="w-6 h-6 text-red-600" />
+                <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+                  <Filter className="w-6 h-6 text-primary" />
                   Log Filters & Settings
                 </h1>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   Configure filtering rules to control which logs appear in your dashboard
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
               {saved && (
-                <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-300">
+                <Badge variant="secondary" className="bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700">
                   <Save className="w-3 h-3 mr-1" />
                   Saved
                 </Badge>
@@ -239,7 +239,6 @@ export default function FilterSettingsPage() {
                 onClick={handleReset}
                 variant="outline"
                 size="sm"
-                className="border-red-300 text-red-700 hover:bg-red-50"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Reset All
@@ -255,7 +254,7 @@ export default function FilterSettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Shield className="w-5 h-5 text-red-600" />
+                <Shield className="w-5 h-5 text-primary" />
                 IP Address Filtering
               </CardTitle>
               <CardDescription>
@@ -265,8 +264,8 @@ export default function FilterSettingsPage() {
             <CardContent className="space-y-4">
               {/* Toggle Options */}
               <div className="space-y-3">
-                <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-                  <span className="text-sm font-medium text-gray-900">
+                <label className="flex items-center justify-between p-3 bg-muted rounded-lg cursor-pointer hover:bg-accent">
+                  <span className="text-sm font-medium text-foreground">
                     Exclude Unknown IPs
                   </span>
                   <input
@@ -280,8 +279,8 @@ export default function FilterSettingsPage() {
                   />
                 </label>
 
-                <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-                  <span className="text-sm font-medium text-gray-900">
+                <label className="flex items-center justify-between p-3 bg-muted rounded-lg cursor-pointer hover:bg-accent">
+                  <span className="text-sm font-medium text-foreground">
                     Exclude Private IPs
                   </span>
                   <input
@@ -295,8 +294,8 @@ export default function FilterSettingsPage() {
                   />
                 </label>
 
-                <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
-                  <span className="text-sm font-medium text-gray-900">
+                <label className="flex items-center justify-between p-3 bg-muted rounded-lg cursor-pointer hover:bg-accent">
+                  <span className="text-sm font-medium text-foreground">
                     Exclude Unknown Routers/Services
                   </span>
                   <input
@@ -313,7 +312,7 @@ export default function FilterSettingsPage() {
 
               {/* Excluded IPs List */}
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Excluded IP Addresses ({settings.excludedIPs.length})
                 </label>
                 <div className="flex gap-2 mb-3">
@@ -323,7 +322,7 @@ export default function FilterSettingsPage() {
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setNewIP(e.target.value)}
                     onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleAddIP()}
                     placeholder="Enter IP address (e.g., 192.168.1.1)"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="flex-1 px-3 py-2 border border-input rounded-lg text-sm bg-background text-foreground"
                   />
                   <Button onClick={handleAddIP} size="sm">
                     <Plus className="w-4 h-4" />
@@ -331,23 +330,23 @@ export default function FilterSettingsPage() {
                 </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {settings.excludedIPs.length === 0 ? (
-                    <p className="text-sm text-gray-500 text-center py-4">
+                    <p className="text-sm text-muted-foreground text-center py-4">
                       No IPs excluded
                     </p>
                   ) : (
                     settings.excludedIPs.map((ip) => (
                       <div
                         key={ip}
-                        className="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded-lg"
+                        className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg"
                       >
-                        <span className="text-sm font-mono text-gray-900">{ip}</span>
+                        <span className="text-sm font-mono text-foreground">{ip}</span>
                         <Button
                           onClick={() => handleRemoveIP(ip)}
                           variant="ghost"
                           size="sm"
                           className="h-6 w-6 p-0"
                         >
-                          <X className="w-4 h-4 text-red-600" />
+                          <X className="w-4 h-4 text-red-600 dark:text-red-400" />
                         </Button>
                       </div>
                     ))
@@ -361,7 +360,7 @@ export default function FilterSettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Globe className="w-5 h-5 text-red-600" />
+                <Globe className="w-5 h-5 text-primary" />
                 Proxy & Real IP Detection
               </CardTitle>
               <CardDescription>
@@ -370,12 +369,12 @@ export default function FilterSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-3">
-                <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                <label className="flex items-center justify-between p-3 bg-muted rounded-lg cursor-pointer hover:bg-accent">
                   <div>
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-foreground">
                       Cloudflare Headers
                     </div>
-                    <div className="text-xs text-gray-600">CF-Connecting-IP</div>
+                    <div className="text-xs text-muted-foreground">CF-Connecting-IP</div>
                   </div>
                   <input
                     type="checkbox"
@@ -393,12 +392,12 @@ export default function FilterSettingsPage() {
                   />
                 </label>
 
-                <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                <label className="flex items-center justify-between p-3 bg-muted rounded-lg cursor-pointer hover:bg-accent">
                   <div>
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-foreground">
                       X-Forwarded-For
                     </div>
-                    <div className="text-xs text-gray-600">Standard proxy header</div>
+                    <div className="text-xs text-muted-foreground">Standard proxy header</div>
                   </div>
                   <input
                     type="checkbox"
@@ -416,12 +415,12 @@ export default function FilterSettingsPage() {
                   />
                 </label>
 
-                <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+                <label className="flex items-center justify-between p-3 bg-muted rounded-lg cursor-pointer hover:bg-accent">
                   <div>
-                    <div className="text-sm font-medium text-gray-900">
+                    <div className="text-sm font-medium text-foreground">
                       X-Real-IP
                     </div>
-                    <div className="text-xs text-gray-600">Nginx proxy header</div>
+                    <div className="text-xs text-muted-foreground">Nginx proxy header</div>
                   </div>
                   <input
                     type="checkbox"
@@ -442,7 +441,7 @@ export default function FilterSettingsPage() {
 
               {/* Custom Headers */}
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Custom Proxy Headers ({settings.proxySettings.customHeaders.length})
                 </label>
                 <div className="flex gap-2 mb-3">
@@ -452,7 +451,7 @@ export default function FilterSettingsPage() {
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setNewCustomHeader(e.target.value)}
                     onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleAddCustomHeader()}
                     placeholder="Header name (e.g., X-Custom-IP)"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="flex-1 px-3 py-2 border border-input rounded-lg text-sm bg-background text-foreground"
                   />
                   <Button onClick={handleAddCustomHeader} size="sm">
                     <Plus className="w-4 h-4" />
@@ -462,16 +461,16 @@ export default function FilterSettingsPage() {
                   {settings.proxySettings.customHeaders.map((header) => (
                     <div
                       key={header}
-                      className="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded-lg"
+                      className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg"
                     >
-                      <span className="text-sm font-mono text-gray-900">{header}</span>
+                      <span className="text-sm font-mono text-foreground">{header}</span>
                       <Button
                         onClick={() => handleRemoveCustomHeader(header)}
                         variant="ghost"
                         size="sm"
                         className="h-6 w-6 p-0"
                       >
-                        <X className="w-4 h-4 text-red-600" />
+                        <X className="w-4 h-4 text-red-600 dark:text-red-400" />
                       </Button>
                     </div>
                   ))}
@@ -484,7 +483,7 @@ export default function FilterSettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-red-600" />
+                <Activity className="w-5 h-5 text-primary" />
                 Status Code Filtering
               </CardTitle>
               <CardDescription>
@@ -501,7 +500,7 @@ export default function FilterSettingsPage() {
                   placeholder="Status code (e.g., 404)"
                   min="100"
                   max="599"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="flex-1 px-3 py-2 border border-input rounded-lg text-sm bg-background text-foreground"
                 />
                 <Button onClick={handleAddStatusCode} size="sm">
                   <Plus className="w-4 h-4" />
@@ -509,23 +508,23 @@ export default function FilterSettingsPage() {
               </div>
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {settings.excludeStatusCodes.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-4">
+                  <p className="text-sm text-muted-foreground text-center py-4">
                     No status codes excluded
                   </p>
                 ) : (
                   settings.excludeStatusCodes.map((code) => (
                     <div
                       key={code}
-                      className="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded-lg"
+                      className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg"
                     >
-                      <span className="text-sm font-mono text-gray-900">{code}</span>
+                      <span className="text-sm font-mono text-foreground">{code}</span>
                       <Button
                         onClick={() => handleRemoveStatusCode(code)}
                         variant="ghost"
                         size="sm"
                         className="h-6 w-6 p-0"
                       >
-                        <X className="w-4 h-4 text-red-600" />
+                        <X className="w-4 h-4 text-red-600 dark:text-red-400" />
                       </Button>
                     </div>
                   ))
@@ -538,7 +537,7 @@ export default function FilterSettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-600" />
+                <AlertTriangle className="w-5 h-5 text-primary" />
                 Bot & Path Filtering
               </CardTitle>
               <CardDescription>
@@ -546,12 +545,12 @@ export default function FilterSettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100">
+              <label className="flex items-center justify-between p-3 bg-muted rounded-lg cursor-pointer hover:bg-accent">
                 <div>
-                  <div className="text-sm font-medium text-gray-900">
+                  <div className="text-sm font-medium text-foreground">
                     Exclude Bots & Crawlers
                   </div>
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-muted-foreground">
                     Filters common bot user agents
                   </div>
                 </div>
@@ -567,7 +566,7 @@ export default function FilterSettingsPage() {
               </label>
 
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Excluded Paths ({settings.excludePaths.length})
                 </label>
                 <div className="flex gap-2 mb-3">
@@ -577,7 +576,7 @@ export default function FilterSettingsPage() {
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setNewPath(e.target.value)}
                     onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => e.key === 'Enter' && handleAddPath()}
                     placeholder="Path to exclude (e.g., /health)"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    className="flex-1 px-3 py-2 border border-input rounded-lg text-sm bg-background text-foreground"
                   />
                   <Button onClick={handleAddPath} size="sm">
                     <Plus className="w-4 h-4" />
@@ -585,23 +584,23 @@ export default function FilterSettingsPage() {
                 </div>
                 <div className="space-y-2 max-h-48 overflow-y-auto">
                   {settings.excludePaths.length === 0 ? (
-                    <p className="text-sm text-gray-500 text-center py-4">
+                    <p className="text-sm text-muted-foreground text-center py-4">
                       No paths excluded
                     </p>
                   ) : (
                     settings.excludePaths.map((path) => (
                       <div
                         key={path}
-                        className="flex items-center justify-between p-2 bg-red-50 border border-red-200 rounded-lg"
+                        className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg"
                       >
-                        <span className="text-sm font-mono text-gray-900">{path}</span>
+                        <span className="text-sm font-mono text-foreground">{path}</span>
                         <Button
                           onClick={() => handleRemovePath(path)}
                           variant="ghost"
                           size="sm"
                           className="h-6 w-6 p-0"
                         >
-                          <X className="w-4 h-4 text-red-600" />
+                          <X className="w-4 h-4 text-red-600 dark:text-red-400" />
                         </Button>
                       </div>
                     ))
@@ -617,7 +616,7 @@ export default function FilterSettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="flex items-center gap-2">
-                    <Filter className="w-5 h-5 text-red-600" />
+                    <Filter className="w-5 h-5 text-primary" />
                     Custom Filter Conditions
                   </CardTitle>
                   <CardDescription>
@@ -649,13 +648,13 @@ export default function FilterSettingsPage() {
             <CardContent>
               {/* Custom Condition Form */}
               {showCustomConditionForm && (
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-4">
+                <div className="mb-6 p-4 bg-muted rounded-lg border border-border">
+                  <h4 className="text-sm font-semibold text-foreground mb-4">
                     {editingId ? 'Edit Custom Condition' : 'New Custom Condition'}
                   </h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
                         Condition Name
                       </label>
                       <input
@@ -663,17 +662,17 @@ export default function FilterSettingsPage() {
                         value={customCondition.name}
                         onChange={(e: ChangeEvent<HTMLInputElement>) => setCustomCondition({ ...customCondition, name: e.target.value })}
                         placeholder="e.g., Exclude Health Checks"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background text-foreground"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
                         Field
                       </label>
                       <select
                         value={customCondition.field}
                         onChange={(e: ChangeEvent<HTMLSelectElement>) => setCustomCondition({ ...customCondition, field: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background text-foreground"
                       >
                         <option value="RequestPath">Request Path</option>
                         <option value="RequestMethod">Request Method</option>
@@ -688,13 +687,13 @@ export default function FilterSettingsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
                         Operator
                       </label>
                       <select
                         value={customCondition.operator}
                         onChange={(e: ChangeEvent<HTMLSelectElement>) => setCustomCondition({ ...customCondition, operator: e.target.value as FilterCondition['operator'] })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background text-foreground"
                       >
                         <option value="equals">Equals</option>
                         <option value="not_equals">Not Equals</option>
@@ -707,7 +706,7 @@ export default function FilterSettingsPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
                         Value
                       </label>
                       <input
@@ -715,27 +714,27 @@ export default function FilterSettingsPage() {
                         value={customCondition.value}
                         onChange={(e: ChangeEvent<HTMLInputElement>) => setCustomCondition({ ...customCondition, value: e.target.value })}
                         placeholder="e.g., /health"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background text-foreground"
                       />
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
                         Filter Mode
                       </label>
                       <select
                         value={customCondition.mode || 'exclude'}
                         onChange={(e: ChangeEvent<HTMLSelectElement>) => setCustomCondition({ ...customCondition, mode: e.target.value as 'exclude' | 'include' })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background text-foreground"
                       >
                         <option value="exclude">Exclude (Hide matching logs)</option>
                         <option value="include">Include (Show ONLY matching logs)</option>
                       </select>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         Exclude mode hides logs that match this condition. Include mode shows ONLY logs that match this condition.
                       </p>
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-medium text-muted-foreground mb-1">
                         Description (optional)
                       </label>
                       <input
@@ -743,7 +742,7 @@ export default function FilterSettingsPage() {
                         value={customCondition.description}
                         onChange={(e: ChangeEvent<HTMLInputElement>) => setCustomCondition({ ...customCondition, description: e.target.value })}
                         placeholder="Brief description of this filter"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        className="w-full px-3 py-2 border border-input rounded-lg text-sm bg-background text-foreground"
                       />
                     </div>
                   </div>
@@ -765,26 +764,26 @@ export default function FilterSettingsPage() {
               {/* Custom Conditions List */}
               <div className="space-y-3">
                 {settings.customConditions.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-8">
+                  <p className="text-sm text-muted-foreground text-center py-8">
                     No custom conditions defined
                   </p>
                 ) : (
                   settings.customConditions.map((condition) => (
                     <div
                       key={condition.id}
-                      className="p-4 bg-white border border-gray-200 rounded-lg"
+                      className="p-4 bg-card border border-border rounded-lg"
                     >
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
-                            <h4 className="text-sm font-semibold text-gray-900">
+                            <h4 className="text-sm font-semibold text-foreground">
                               {condition.name}
                             </h4>
                             <Badge
                               variant={condition.enabled ? 'default' : 'secondary'}
                               className={
                                 condition.enabled
-                                  ? 'bg-green-100 text-green-700 border-green-300'
+                                  ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700'
                                   : ''
                               }
                             >
@@ -794,18 +793,18 @@ export default function FilterSettingsPage() {
                               variant="outline"
                               className={
                                 condition.mode === 'include'
-                                  ? 'bg-blue-50 text-blue-700 border-blue-300'
-                                  : 'bg-red-50 text-red-700 border-red-300'
+                                  ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                                  : 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-300 dark:border-red-700'
                               }
                             >
                               {condition.mode === 'include' ? 'INCLUDE' : 'EXCLUDE'}
                             </Badge>
                           </div>
-                          <p className="text-xs text-gray-600 font-mono">
+                          <p className="text-xs text-muted-foreground font-mono">
                             {condition.field} {condition.operator.replace(/_/g, ' ')} &quot;{condition.value}&quot;
                           </p>
                           {condition.description && (
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className="text-xs text-muted-foreground mt-1">
                               {condition.description}
                             </p>
                           )}
@@ -817,7 +816,7 @@ export default function FilterSettingsPage() {
                             size="sm"
                             className="h-8 w-8 p-0"
                           >
-                            <Edit2 className="w-4 h-4 text-gray-600" />
+                            <Edit2 className="w-4 h-4 text-muted-foreground" />
                           </Button>
                           <label className="cursor-pointer">
                             <input
@@ -841,7 +840,7 @@ export default function FilterSettingsPage() {
                             size="sm"
                             className="h-8 w-8 p-0"
                           >
-                            <Trash2 className="w-4 h-4 text-red-600" />
+                            <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
                           </Button>
                         </div>
                       </div>
@@ -857,12 +856,12 @@ export default function FilterSettingsPage() {
         <Card className="mt-6">
           <CardContent className="py-6">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
               <div>
-                <h4 className="font-semibold text-gray-900 mb-1">
+                <h4 className="font-semibold text-foreground mb-1">
                   How Filters Work
                 </h4>
-                <ul className="text-sm text-gray-600 space-y-1">
+                <ul className="text-sm text-muted-foreground space-y-1">
                   <li>• All filter settings are applied at the stream level before logs reach the dashboard</li>
                   <li>• Filters are saved automatically and persist across browser sessions</li>
                   <li>• Proxy headers are checked in order of priority: CF-Connecting-IP → X-Real-IP → X-Forwarded-For → Custom Headers</li>

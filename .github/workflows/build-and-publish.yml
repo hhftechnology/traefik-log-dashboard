@@ -3,6 +3,7 @@ name: Build and Release
 on:
   push:
     branches:
+      - main
       - dev-dashboard
     paths:
       - 'agent/**'
@@ -13,7 +14,7 @@ on:
       - 'v*'
   pull_request:
     branches:
-      - dev-dashboard
+      - main
   workflow_dispatch:
     inputs:
       release_cli:

@@ -1,0 +1,146 @@
+---
+title: Troubleshooting
+description: Common issues and solutions
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Agent Connection Issues
+
+### Dashboard shows "Agent Offline"
+
+1. **Check agent is running**:
+   ```bash
+   docker ps | grep traefik-agent
+   ```
+
+2. **Verify agent health**:
+   ```bash
+   curl http://localhost:5000/api/logs/status
+   ```
+
+3. **Check token match**: Ensure `TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN` on the agent matches `AGENT_API_TOKEN` on the dashboard.
+
+4. **Network connectivity**: If using Docker, ensure both containers are on the same network.
+
+### Cannot connect to remote agents
+
+The dashboard requires direct HTTP connectivity to agents. Options:
+
+1. **VPN/Tunnel**: Use Tailscale, WireGuard, or similar to connect networks securely.
+2. **Reverse Proxy**: Put the agent behind Traefik with authentication and use the proxied URL.
+3. **Expose Port**: Only recommended for testing, not production.
+
+## Log Parsing Issues
+
+### No logs appearing in dashboard
+
+1. **Verify log path**: Check `TRAEFIK_LOG_DASHBOARD_ACCESS_PATH` points to the correct file.
+   ```bash
+   docker exec traefik-agent ls -la /logs/
+   ```
+
+2. **Check log format**: Ensure `TRAEFIK_LOG_DASHBOARD_LOG_FORMAT` matches your Traefik configuration (json or common).
+
+3. **Verify permissions**: The agent needs read access to log files.
+
+### Logs show but metrics are wrong
+
+1. **Check time range**: The dashboard defaults to showing recent data. Adjust the time range filter.
+2. **Clear position file**: Delete `/data/.position` in the agent container to re-read logs from the beginning.
+
+## GeoIP Issues
+
+### Geographic data not showing
+
+<Callout type="info">
+GeoIP is handled automatically by the dashboard using [geolite2-redist](https://www.npmjs.com/package/geolite2-redist). No configuration needed.
+</Callout>
+
+1. **Check dashboard logs**: Look for GeoIP initialization errors.
+2. **Verify IPs are public**: Private IPs (10.x.x.x, 192.168.x.x, etc.) cannot be geolocated.
+3. **Container restart**: Restart the dashboard container to re-initialize GeoIP databases.
+
+### All IPs show as "Unknown" location
+
+- Private IP ranges cannot be geolocated
+- The 11.0.0.0/8 range is reserved and shows as "Unknown"
+- Check if requests are coming through a proxy that masks real IPs
+
+## Environment Agent
+
+### Cannot delete agent from UI
+
+<Callout type="warn">
+The agent configured via `AGENT_API_URL` and `AGENT_API_TOKEN` environment variables is protected and cannot be deleted from the UI.
+</Callout>
+
+This is by design to ensure you always have a primary agent connection. To change it:
+
+1. Update the environment variables in `docker-compose.yml`
+2. Restart the dashboard container
+
+### Multiple agents with same name
+
+Each agent should have a unique name. If adding agents manually, use descriptive names like:
+- `Production-DC1`
+- `Staging-Cloud`
+- `Edge-Server-1`
+
+## Alerting Issues
+
+### Discord notifications not sending
+
+1. **Verify webhook URL**: Test the webhook from **Settings > Alerts > Webhooks**.
+2. **Check background scheduler**: Ensure `ENABLE_BACKGROUND_SCHEDULER=true`.
+3. **Dashboard must be running**: Alerts are processed server-side but require the dashboard to be up.
+
+### Alerts firing too frequently
+
+1. Adjust threshold values in alert rules
+2. Increase the check interval (minimum 5 minutes)
+3. Use the "cooldown" period to prevent repeated alerts
+
+## Performance Issues
+
+### Dashboard is slow
+
+1. **Reduce log display limit**: Lower `NEXT_PUBLIC_MAX_LOGS_DISPLAY` (default: 500).
+2. **Check agent performance**: Monitor agent CPU/memory usage.
+3. **Narrow time range**: Use shorter time ranges for faster queries.
+
+### Agent consuming too much memory
+
+1. **Check log file size**: Very large log files can cause memory issues.
+2. **Enable position tracking**: Ensure the agent is only reading new entries.
+3. **Use log rotation**: Configure Traefik to rotate logs regularly.
+
+## Docker Issues
+
+### Permission denied on data volume
+
+The dashboard runs as user 1001:1001 by default. Fix permissions:
+
+```bash
+mkdir -p ./data/dashboard
+chown -R 1001:1001 ./data/dashboard
+```
+
+### Container keeps restarting
+
+Check container logs:
+```bash
+docker logs traefik-log-dashboard
+docker logs traefik-log-dashboard-agent
+```
+
+Common causes:
+- Missing required environment variables
+- Invalid log file paths
+- Database permission issues
+
+## Getting Help
+
+- **Documentation**: Check the [full documentation](/docs)
+- **Discord**: Join our [community](https://discord.gg/HDCt9MjyMJ)
+- **GitHub Issues**: [Report bugs](https://github.com/hhftechnology/traefik-log-dashboard/issues)

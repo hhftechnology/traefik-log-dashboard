@@ -1,31 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-import maxmind, { Reader } from 'maxmind';
-import path from 'path';
+import maxmind, { CityResponse, Reader } from 'maxmind';
+import * as geolite2 from 'geolite2-redist';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-let reader: Reader<any> | null = null;
+let reader: Reader<CityResponse> | null = null;
+let readerPromise: Promise<Reader<CityResponse>> | null = null;
 
-async function getReader() {
+async function getReader(): Promise<Reader<CityResponse>> {
+  // Return cached reader
   if (reader) return reader;
-  
+
+  // Return in-progress promise to avoid race conditions
+  if (readerPromise) return readerPromise;
+
+  // Create new reader using geolite2-redist API
+  readerPromise = geolite2.open<Reader<CityResponse>>('GeoLite2-City' as geolite2.GeoIpDbName, (path) =>
+    maxmind.open<CityResponse>(path)
+  );
+
   try {
-    // Try to locate the database file
-    // In development/production it should be in node_modules
-    const dbPath = path.join(process.cwd(), 'node_modules', 'geolite2-redist', 'dist', 'GeoLite2-City.mmdb');
-    reader = await maxmind.open(dbPath);
+    reader = await readerPromise;
+    console.warn('[GeoIP] Database loaded successfully');
     return reader;
   } catch (error) {
-    console.error('Failed to open GeoIP database:', error);
-    return null;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[GeoIP] Failed to load database:', errorMessage);
+    // Log additional details for directory permission issues
+    if (errorMessage.includes('ENOENT') || errorMessage.includes('mkdir')) {
+      console.error('[GeoIP] Directory creation issue detected. Ensure /app/node_modules/geolite2-redist/dbs-tmp exists and is writable.');
+    }
+    readerPromise = null;
+    throw error;
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ips } = body;
+    const { ips }: { ips: string[] } = body;
 
     if (!ips || !Array.isArray(ips) || ips.length === 0) {
       return NextResponse.json(
@@ -42,8 +56,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const lookup = await getReader();
-    
+    let lookup: Reader<CityResponse> | null = null;
+
+    try {
+      lookup = await getReader();
+    } catch {
+      return NextResponse.json(
+        { error: 'GeoIP database not available' },
+        { status: 503 }
+      );
+    }
+
     if (!lookup) {
       return NextResponse.json(
         { error: 'GeoIP database not available' },
@@ -55,8 +78,6 @@ export async function POST(request: NextRequest) {
 
     for (const ip of ips) {
       try {
-        // Skip private IPs check here as the library handles standard IPs
-        // But we can add a quick check if needed, though the reader just returns null for private/unknown
         const result = lookup.get(ip);
 
         if (result && result.country) {
@@ -68,15 +89,15 @@ export async function POST(request: NextRequest) {
             longitude: result.location?.longitude,
           });
         }
-      } catch (e) {
+      } catch {
         // Ignore invalid IPs
         continue;
       }
     }
-    
+
     const res = NextResponse.json({ locations });
     res.headers.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-    
+
     return res;
   } catch (error) {
     console.error('Location lookup API error:', error);

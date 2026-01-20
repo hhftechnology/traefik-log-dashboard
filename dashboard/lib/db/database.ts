@@ -164,7 +164,9 @@ export function syncEnvAgents(): void {
   const envToken = process.env.AGENT_API_TOKEN;
   
   if (!envUrl || !envToken) {
-    console.log('No environment agents to sync');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('No environment agents to sync');
+    }
     return;
   }
 
@@ -189,7 +191,9 @@ export function syncEnvAgents(): void {
       WHERE source = 'env'
     `).run(envAgent.name, envAgent.url, envAgent.token);
     
-    console.log('Updated environment agent in database');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Updated environment agent in database');
+    }
   } else {
     db.prepare(`
       INSERT INTO agents (id, name, url, token, location, number, status, source)
@@ -204,7 +208,9 @@ export function syncEnvAgents(): void {
       envAgent.status
     );
     
-    console.log('Added environment agent to database');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Added environment agent to database');
+    }
   }
 }
 
@@ -215,19 +221,19 @@ export function getAllAgents(): Agent[] {
   const db = getDatabase();
   const rows = db.prepare(`
     SELECT * FROM agents ORDER BY number ASC
-  `).all() as any[];
+  `).all() as Array<Record<string, unknown>>;
 
   return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    url: row.url,
-    token: row.token,
-    location: row.location,
-    number: row.number,
-    status: row.status,
-    lastSeen: row.last_seen ? new Date(row.last_seen) : undefined,
-    description: row.description,
-    tags: row.tags ? JSON.parse(row.tags) : undefined,
+    id: row.id as string,
+    name: row.name as string,
+    url: row.url as string,
+    token: row.token as string,
+    location: row.location as 'on-site' | 'off-site',
+    number: row.number as number,
+    status: row.status as 'online' | 'offline' | 'checking',
+    lastSeen: row.last_seen ? new Date(row.last_seen as string) : undefined,
+    description: row.description as string | undefined,
+    tags: row.tags ? JSON.parse(row.tags as string) : undefined,
   }));
 }
 
@@ -238,21 +244,21 @@ export function getAgentById(id: string): Agent | null {
   const db = getDatabase();
   const row = db.prepare(`
     SELECT * FROM agents WHERE id = ?
-  `).get(id) as any;
+  `).get(id) as Record<string, unknown> | undefined;
 
   if (!row) return null;
 
   return {
-    id: row.id,
-    name: row.name,
-    url: row.url,
-    token: row.token,
-    location: row.location,
-    number: row.number,
-    status: row.status,
-    lastSeen: row.last_seen ? new Date(row.last_seen) : undefined,
-    description: row.description,
-    tags: row.tags ? JSON.parse(row.tags) : undefined,
+    id: row.id as string,
+    name: row.name as string,
+    url: row.url as string,
+    token: row.token as string,
+    location: row.location as 'on-site' | 'off-site',
+    number: row.number as number,
+    status: row.status as 'online' | 'offline' | 'checking',
+    lastSeen: row.last_seen ? new Date(row.last_seen as string) : undefined,
+    description: row.description as string | undefined,
+    tags: row.tags ? JSON.parse(row.tags as string) : undefined,
   };
 }
 
@@ -300,7 +306,7 @@ export function updateAgent(id: string, updates: AgentUpdate): void {
   const db = getDatabase();
   
   const sets: string[] = [];
-  const values: any[] = [];
+  const values: unknown[] = [];
 
   if (updates.name !== undefined) {
     sets.push('name = ?');
@@ -358,7 +364,7 @@ export function updateAgent(id: string, updates: AgentUpdate): void {
 export function deleteAgent(id: string): void {
   const db = getDatabase();
   
-  const agent = db.prepare(`SELECT source FROM agents WHERE id = ?`).get(id) as any;
+  const agent = db.prepare(`SELECT source FROM agents WHERE id = ?`).get(id) as { source?: string } | undefined;
   if (agent?.source === 'env') {
     throw new Error('Cannot delete environment-sourced agents');
   }
@@ -422,17 +428,17 @@ export function getAllWebhooks(): Webhook[] {
   const db = getDatabase();
   const rows = db.prepare(`
     SELECT * FROM webhooks ORDER BY created_at DESC
-  `).all() as any[];
+  `).all() as Array<Record<string, unknown>>;
 
   return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    url: row.url,
+    id: row.id as string,
+    name: row.name as string,
+    type: row.type as 'discord' | 'telegram',
+    url: row.url as string,
     enabled: Boolean(row.enabled),
-    description: row.description,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    description: row.description as string | undefined,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
   }));
 }
 
@@ -443,19 +449,19 @@ export function getWebhookById(id: string): Webhook | null {
   const db = getDatabase();
   const row = db.prepare(`
     SELECT * FROM webhooks WHERE id = ?
-  `).get(id) as any;
+  `).get(id) as Record<string, unknown> | undefined;
 
   if (!row) return null;
 
   return {
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    url: row.url,
+    id: row.id as string,
+    name: row.name as string,
+    type: row.type as 'discord' | 'telegram',
+    url: row.url as string,
     enabled: Boolean(row.enabled),
-    description: row.description,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    description: row.description as string | undefined,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
   };
 }
 
@@ -497,7 +503,7 @@ export function updateWebhook(id: string, updates: WebhookUpdate): void {
   const db = getDatabase();
 
   const sets: string[] = [];
-  const values: any[] = [];
+  const values: unknown[] = [];
 
   if (updates.name !== undefined) {
     sets.push('name = ?');
@@ -545,17 +551,17 @@ export function getEnabledWebhooks(): Webhook[] {
   const db = getDatabase();
   const rows = db.prepare(`
     SELECT * FROM webhooks WHERE enabled = 1 ORDER BY created_at DESC
-  `).all() as any[];
+  `).all() as Array<Record<string, unknown>>;
 
   return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    url: row.url,
+    id: row.id as string,
+    name: row.name as string,
+    type: row.type as 'discord' | 'telegram',
+    url: row.url as string,
     enabled: Boolean(row.enabled),
-    description: row.description,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    description: row.description as string | undefined,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
   }));
 }
 
@@ -568,20 +574,20 @@ export function getAllAlertRules(): AlertRule[] {
   const db = getDatabase();
   const rows = db.prepare(`
     SELECT * FROM alert_rules ORDER BY created_at DESC
-  `).all() as any[];
+  `).all() as Array<Record<string, unknown>>;
 
   return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    description: row.description,
+    id: row.id as string,
+    name: row.name as string,
+    description: row.description as string | undefined,
     enabled: Boolean(row.enabled),
-    agent_id: row.agent_id,
-    webhook_ids: JSON.parse(row.webhook_ids),
-    trigger_type: row.trigger_type,
-    interval: row.interval,
-    parameters: JSON.parse(row.parameters),
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    agent_id: row.agent_id as string | undefined,
+    webhook_ids: JSON.parse(row.webhook_ids as string) as string[],
+    trigger_type: row.trigger_type as 'interval' | 'threshold' | 'event',
+    interval: row.interval as '5m' | '15m' | '30m' | '1h' | '6h' | '12h' | '24h' | undefined,
+    parameters: JSON.parse(row.parameters as string),
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
   }));
 }
 
@@ -592,22 +598,22 @@ export function getAlertRuleById(id: string): AlertRule | null {
   const db = getDatabase();
   const row = db.prepare(`
     SELECT * FROM alert_rules WHERE id = ?
-  `).get(id) as any;
+  `).get(id) as Record<string, unknown> | undefined;
 
   if (!row) return null;
 
   return {
-    id: row.id,
-    name: row.name,
-    description: row.description,
+    id: row.id as string,
+    name: row.name as string,
+    description: row.description as string | undefined,
     enabled: Boolean(row.enabled),
-    agent_id: row.agent_id,
-    webhook_ids: JSON.parse(row.webhook_ids),
-    trigger_type: row.trigger_type,
-    interval: row.interval,
-    parameters: JSON.parse(row.parameters),
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    agent_id: row.agent_id as string | undefined,
+    webhook_ids: JSON.parse(row.webhook_ids as string) as string[],
+    trigger_type: row.trigger_type as 'interval' | 'threshold' | 'event',
+    interval: row.interval as '5m' | '15m' | '30m' | '1h' | '6h' | '12h' | '24h' | undefined,
+    parameters: JSON.parse(row.parameters as string),
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
   };
 }
 
@@ -652,7 +658,7 @@ export function updateAlertRule(id: string, updates: AlertRuleUpdate): void {
   const db = getDatabase();
 
   const sets: string[] = [];
-  const values: any[] = [];
+  const values: unknown[] = [];
 
   if (updates.name !== undefined) {
     sets.push('name = ?');
@@ -712,20 +718,20 @@ export function getEnabledAlertRules(): AlertRule[] {
   const db = getDatabase();
   const rows = db.prepare(`
     SELECT * FROM alert_rules WHERE enabled = 1 ORDER BY created_at DESC
-  `).all() as any[];
+  `).all() as Array<Record<string, unknown>>;
 
   return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    description: row.description,
+    id: row.id as string,
+    name: row.name as string,
+    description: row.description as string | undefined,
     enabled: Boolean(row.enabled),
-    agent_id: row.agent_id,
-    webhook_ids: JSON.parse(row.webhook_ids),
-    trigger_type: row.trigger_type,
-    interval: row.interval,
-    parameters: JSON.parse(row.parameters),
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    agent_id: row.agent_id as string | undefined,
+    webhook_ids: JSON.parse(row.webhook_ids as string) as string[],
+    trigger_type: row.trigger_type as 'interval' | 'threshold' | 'event',
+    interval: row.interval as '5m' | '15m' | '30m' | '1h' | '6h' | '12h' | '24h' | undefined,
+    parameters: JSON.parse(row.parameters as string),
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
   }));
 }
 
@@ -772,17 +778,17 @@ export function getNotificationHistory(limit: number = 100, offset: number = 0):
     SELECT * FROM notification_history
     ORDER BY created_at DESC
     LIMIT ? OFFSET ?
-  `).all(limit, offset) as any[];
+  `).all(limit, offset) as Array<Record<string, unknown>>;
 
   return rows.map(row => ({
-    id: row.id,
-    alert_rule_id: row.alert_rule_id,
-    webhook_id: row.webhook_id,
-    agent_id: row.agent_id,
-    status: row.status,
-    error_message: row.error_message,
-    payload: row.payload,
-    created_at: row.created_at,
+    id: row.id as string,
+    alert_rule_id: row.alert_rule_id as string,
+    webhook_id: row.webhook_id as string,
+    agent_id: row.agent_id as string | undefined,
+    status: row.status as 'success' | 'failed',
+    error_message: row.error_message as string | undefined,
+    payload: row.payload as string,
+    created_at: row.created_at as string,
   }));
 }
 
@@ -799,17 +805,17 @@ export function getNotificationHistoryByAlertRule(
     WHERE alert_rule_id = ?
     ORDER BY created_at DESC
     LIMIT ?
-  `).all(alertRuleId, limit) as any[];
+  `).all(alertRuleId, limit) as Array<Record<string, unknown>>;
 
   return rows.map(row => ({
-    id: row.id,
-    alert_rule_id: row.alert_rule_id,
-    webhook_id: row.webhook_id,
-    agent_id: row.agent_id,
-    status: row.status,
-    error_message: row.error_message,
-    payload: row.payload,
-    created_at: row.created_at,
+    id: row.id as string,
+    alert_rule_id: row.alert_rule_id as string,
+    webhook_id: row.webhook_id as string,
+    agent_id: row.agent_id as string | undefined,
+    status: row.status as 'success' | 'failed',
+    error_message: row.error_message as string | undefined,
+    payload: row.payload as string,
+    created_at: row.created_at as string,
   }));
 }
 
@@ -891,7 +897,7 @@ export function getLatestSnapshot(agentId: string, interval: string): MetricSnap
     timestamp: row.timestamp,
     window_start: row.window_start,
     window_end: row.window_end,
-    interval: row.interval as any,
+    interval: row.interval as '5m' | '15m' | '30m' | '1h' | '6h' | '12h' | '24h',
     log_count: row.log_count,
     metrics: JSON.parse(row.metrics),
   };
@@ -921,7 +927,7 @@ export function getSnapshotsByTimeRange(
     timestamp: row.timestamp,
     window_start: row.window_start,
     window_end: row.window_end,
-    interval: row.interval as any,
+    interval: row.interval as '5m' | '15m' | '30m' | '1h' | '6h' | '12h' | '24h',
     log_count: row.log_count,
     metrics: JSON.parse(row.metrics),
   }));

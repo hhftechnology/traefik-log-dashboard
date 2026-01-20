@@ -1,0 +1,271 @@
+---
+title: Features
+description: Comprehensive capabilities of the Traefik Log Dashboard
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+import { Card, Cards } from 'fumadocs-ui/components/card';
+
+## Dashboard Features
+
+### Real-time Analytics
+
+<Tabs items={['Metrics', 'Visualization', 'Filtering']}>
+<Tab value="Metrics">
+- **Request Metrics**: Total requests, requests per second, traffic trends
+- **Response Time Analysis**: Average, P95, P99 percentiles with distribution charts
+- **Error Tracking**: 4xx/5xx status codes with detailed breakdowns
+- **Performance Monitoring**: Route-level and service-level response times
+</Tab>
+
+<Tab value="Visualization">
+- **Interactive 3D Globe**: Geographic distribution with smooth transitions to maps
+- **Time-series Charts**: Request volume, response times, error rates over time
+- **Heat Maps**: Geographic request density visualization
+- **Live Tables**: Recent logs with sortable columns and pagination
+- **Sparkline Charts**: Inline trend indicators for quick insights
+</Tab>
+
+<Tab value="Filtering">
+- **Advanced Filters**: Include/exclude modes for precise log filtering
+- **Geographic Filtering**: Filter by country, city, or region
+- **Custom Conditions**: Multiple filter conditions with AND/OR logic
+- **Time Range Selection**: Last 1h, 6h, 24h, 7d, 30d, or custom ranges
+- **Quick Filters**: Status codes, HTTP methods, services, routers
+</Tab>
+</Tabs>
+
+### Geographic Features
+
+<Callout title="Automatic GeoIP" type="success">
+Geographic features work automatically! The dashboard uses [geolite2-redist](https://www.npmjs.com/package/geolite2-redist) which auto-downloads MaxMind GeoLite2 databases.
+</Callout>
+
+- **Country-level Mapping**: Track requests by country with ISO codes
+- **City-level Precision**: Detailed city-based analytics
+- **Interactive Globe**: 3D visualization with zoom and rotation
+- **Map Transitions**: Smooth animations between globe and flat maps
+- **Private IP Detection**: Automatic identification of local/private IPs
+
+### UI/UX Features
+
+- **Responsive Design**: Optimized for desktop, tablet, and mobile
+- **Dark Mode**: Beautiful dark theme with high contrast
+- **Auto-refresh**: Configurable intervals (5s, 10s, 30s, 60s)
+- **Persistent Settings**: User preferences saved in localStorage
+- **Agent Selector**: Quick switching between multiple agents
+- **Health Indicators**: Visual status for agent connectivity
+
+## Multi-Agent Capabilities
+
+### Agent Management
+
+- **Unlimited Agents**: Connect and manage as many Traefik instances as needed
+- **Location Awareness**: Organize agents by "on-site" or "off-site" locations
+- **Health Monitoring**: Real-time status tracking with visual indicators
+- **Bulk Operations**: Enable/disable/delete multiple agents simultaneously
+- **Import/Export**: Backup and restore agent configurations
+
+### Agent Organization
+
+<Callout type="info">
+Use tags and descriptions to organize large deployments effectively.
+</Callout>
+
+- **Tagging System**: Categorize agents with custom tags (e.g., "production", "staging", "datacenter-1")
+- **Search and Filter**: Quick search across agent names, URLs, and tags
+- **Status Badges**: Visual indicators for online/offline/checking states
+- **Last Seen Tracking**: Timestamp of last successful connection
+- **Bulk Health Checks**: Test all agents simultaneously
+
+### Agent Security
+
+- **Individual Authentication**: Each agent has its own unique token
+- **Protected Environments**: Environment-defined agents cannot be deleted from UI
+- **Token Management**: Securely update authentication tokens
+- **Connection Encryption**: HTTPS support for secure communication
+
+### Data Aggregation
+
+- **Combined Views**: See metrics from all agents in a single dashboard
+- **Individual Analysis**: Drill down into specific agent data
+- **Comparative Metrics**: Compare performance across different agents
+- **Unified Filtering**: Apply filters across single or multiple agents
+
+## Agent Features
+
+### High-Performance Log Parsing
+
+- **Go-based Engine**: Optimized for speed and low memory usage
+- **Format Support**: Both JSON and Common Log Format (CLF)
+- **Position Tracking**: Only reads new entries, not entire file
+- **Compressed Logs**: Native .gz file support
+- **Large File Handling**: Efficiently processes multi-GB log files
+
+### System Monitoring
+
+- **Resource Tracking**: CPU, memory, disk usage monitoring
+- **Health Checks**: Built-in health check endpoints
+- **Metrics Export**: RESTful API for all metrics
+- **Status API**: Real-time status and statistics
+
+### API Features
+
+<Callout type="info">
+All agent APIs require Bearer token authentication.
+</Callout>
+
+- **RESTful Endpoints**: Well-documented API for programmatic access
+- **Bearer Token Auth**: Secure API access with token validation
+- **CORS Support**: Configurable cross-origin requests
+- **JSON Responses**: Consistent JSON formatting
+
+## Alerting & Notifications
+
+### Background Schedulers
+
+<Callout title="Server-side Processing" type="success">
+Alerts are processed server-side, so notifications work even when the dashboard is closed!
+</Callout>
+
+- **Background Processing**: Metrics calculated and alerts triggered on the server
+- **Scheduled Jobs**: Runs every 5 minutes via Next.js instrumentation
+- **Persistent Alerts**: Alert configurations stored in database
+- **Daily Summaries**: Automatic daily traffic reports
+
+### Notification Channels
+
+- **Discord Webhooks**: Send alerts to Discord channels
+- **Webhook Support**: Generic webhook for custom integrations
+- **Alert Types**: Threshold-based and time-based alerts
+- **Test Notifications**: Verify webhook configuration before deployment
+
+### Alert Types
+
+- **Threshold Alerts**: Trigger when metrics exceed defined limits
+  - Error rate > X%
+  - Response time > X ms
+  - Request rate > X req/s
+- **Daily Summaries**: Scheduled reports sent at configured times
+- **Custom Conditions**: Flexible alert conditions with multiple criteria
+
+## Advanced Filtering
+
+### Filter Modes
+
+<Tabs items={['Include Mode', 'Exclude Mode']}>
+<Tab value="Include Mode">
+**Show ONLY matching logs**
+
+Example: View traffic from a specific IP
+```
+Field: ClientHost
+Operator: equals
+Value: 103.5.140.142
+Mode: Include
+```
+Result: Only logs from that IP are shown.
+</Tab>
+
+<Tab value="Exclude Mode">
+**Hide matching logs**
+
+Example: Hide health check endpoints
+```
+Field: RequestPath
+Operator: contains
+Value: /health
+Mode: Exclude
+```
+Result: All logs except health checks are shown.
+</Tab>
+</Tabs>
+
+### Filter Fields
+
+Available filter fields:
+- **Client**: ClientHost, ClientAddr
+- **Request**: RequestMethod, RequestPath, RequestHost
+- **Response**: DownstreamStatus, Duration
+- **Routing**: RouterName, ServiceName
+- **Geographic**: geoCountry, geoCity
+- **User Agent**: UserAgent
+
+### Custom Conditions
+
+- **Multiple Conditions**: Combine multiple filters
+- **Operators**: equals, contains, starts with, ends with, regex
+- **Edit Capability**: Modify existing filters without recreating
+- **Toggle Active/Inactive**: Temporarily disable filters
+
+### Saved Filters
+
+- **Filter Presets**: Save commonly used filter combinations
+- **Quick Access**: Enable/disable saved filters with one click
+- **Export/Import**: Share filter configurations across instances
+
+## Performance Optimizations
+
+### Dashboard Performance
+
+- **Parallel Fetching**: Multiple API calls execute simultaneously
+- **Optimized State Management**: Direct state updates, minimal re-renders
+- **Efficient Rendering**: Virtual scrolling for large datasets
+- **Memory Management**: Configurable log display limits (default 500)
+- **Lazy Loading**: Components load on-demand
+
+### Agent Performance
+
+- **Position Tracking**: Only reads new log entries
+- **File Watching**: Efficient file change detection
+- **Caching**: Intelligent caching for GeoIP lookups
+- **Connection Pooling**: Reuses connections for efficiency
+
+### Database Optimizations
+
+- **Indexes**: Optimized database queries with proper indexing
+- **Vacuum**: Automatic database cleanup
+- **WAL Mode**: Write-Ahead Logging for better concurrency
+
+## Demo Mode
+
+<Callout title="No Agent Required" type="success">
+Demo mode generates realistic data for testing and showcasing features.
+</Callout>
+
+- **Realistic Data**: Simulated traffic patterns and geographic distribution
+- **Full Feature Set**: All dashboard features work in demo mode
+- **No Configuration**: Works immediately without any setup
+- **Configurable**: `NEXT_PUBLIC_SHOW_DEMO_PAGE` environment variable
+
+## CLI Features
+
+The terminal-based CLI provides:
+
+- **Bubble Tea TUI**: Beautiful terminal interface
+- **Real-time Updates**: Live dashboard in your terminal
+- **Multiple Data Sources**: File, agent API, or demo data
+- **Keyboard Navigation**: Efficient keyboard shortcuts
+- **Responsive Layout**: Adapts to terminal size
+- **System Monitoring**: Built-in resource tracking
+
+## Next Steps
+
+<Cards>
+  <Card
+    title="Quick Start"
+    description="Get started with all features in 5 minutes"
+    href="/docs/quickstart"
+  />
+  <Card
+    title="Configuration"
+    description="Configure features and customize behavior"
+    href="/docs/configuration"
+  />
+  <Card
+    title="Usage Guide"
+    description="Learn how to use advanced features"
+    href="/docs/usage"
+  />
+</Cards>

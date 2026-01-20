@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -41,16 +42,24 @@ type TraefikLog struct {
 	RequestUserAgent    string    `json:"RequestUserAgent"`
 }
 
+// OPTIMIZATION: Compile regex once at package initialization
 var clfRegex = regexp.MustCompile(`^(\S+) - (\S+) \[([^\]]+)\] "(\S+) (\S+) (\S+)" (\d+) (\d+) "([^"]*)" "([^"]*)" (\d+) "([^"]*)" "([^"]*)" (\d+)ms`)
 
+// OPTIMIZED: ParseTraefikLog with early validation
 func ParseTraefikLog(logLine string) (*TraefikLog, error) {
+	// OPTIMIZATION: Avoid TrimSpace if possible, check length first
+	if len(logLine) == 0 {
+		return nil, nil
+	}
+
 	logLine = strings.TrimSpace(logLine)
-	
+
 	if logLine == "" {
 		return nil, nil
 	}
 
-	if strings.HasPrefix(logLine, "{") {
+	// OPTIMIZATION: Direct byte check instead of HasPrefix for better performance
+	if logLine[0] == '{' {
 		return parseJSONLog(logLine)
 	}
 
@@ -101,8 +110,11 @@ func parseCLFLog(logLine string) (*TraefikLog, error) {
 	return log, nil
 }
 
+// OPTIMIZED: ParseTraefikLogs with pre-allocation
 func ParseTraefikLogs(logLines []string) []*TraefikLog {
-	var logs []*TraefikLog
+	// OPTIMIZATION: Pre-allocate slice with capacity to reduce reallocations
+	logs := make([]*TraefikLog, 0, len(logLines))
+
 	for _, line := range logLines {
 		log, err := ParseTraefikLog(line)
 		if err == nil && log != nil {
@@ -110,4 +122,55 @@ func ParseTraefikLogs(logLines []string) []*TraefikLog {
 		}
 	}
 	return logs
+}
+
+func ParseTraefikLogsBatched(logLines []string, batchSize int) []*TraefikLog {
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+
+	numBatches := (len(logLines) + batchSize - 1) / batchSize
+	results := make([][]*TraefikLog, numBatches)
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < numBatches; i++ {
+		wg.Add(1)
+		go func(batchIdx int) {
+			defer wg.Done()
+
+			start := batchIdx * batchSize
+			end := start + batchSize
+			if end > len(logLines) {
+				end = len(logLines)
+			}
+
+			batch := logLines[start:end]
+			batchResults := make([]*TraefikLog, 0, len(batch))
+
+			for _, line := range batch {
+				log, err := ParseTraefikLog(line)
+				if err == nil && log != nil {
+					batchResults = append(batchResults, log)
+				}
+			}
+
+			results[batchIdx] = batchResults
+		}(i)
+	}
+
+	wg.Wait()
+
+	// Merge results
+	totalLogs := 0
+	for _, batch := range results {
+		totalLogs += len(batch)
+	}
+
+	merged := make([]*TraefikLog, 0, totalLogs)
+	for _, batch := range results {
+		merged = append(merged, batch...)
+	}
+
+	return merged
 }

@@ -23,9 +23,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate URL format
-    let url: URL;
     try {
-      url = new URL(agentUrl);
+      new URL(agentUrl);
     } catch {
       return NextResponse.json(
         { error: 'Invalid agent URL format' },

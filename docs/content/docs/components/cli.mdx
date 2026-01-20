@@ -1,0 +1,189 @@
+---
+title: CLI
+description: A beautiful terminal-based dashboard for analyzing Traefik access logs in real-time.
+---
+
+A beautiful terminal-based dashboard for analyzing Traefik access logs in real-time. Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) for an interactive TUI experience.
+
+
+
+## Features
+
+-  **Real-time Dashboard** - Interactive terminal UI with multiple visualization cards
+-  **Multiple Data Sources** - Read from log files, connect to Traefik Analytics Agent, or use demo data
+-  **Rich Metrics** - Request rates, response times, status codes, error rates, and more
+-  **Beautiful UI** - Clean, modern interface with color-coded indicators and progress bars
+-  **Fast & Efficient** - Optimized log parsing with incremental reading and gzip support
+-  **Geographic Distribution** - Request origin tracking by country and city
+-  **System Monitoring** - CPU, memory, and disk usage statistics
+-  **Responsive Layout** - Adapts to terminal size with intelligent card arrangement
+
+## Installation
+
+### Using Go
+
+```bash
+go install github.com/hhftechnology/traefik-log-dashboard/cmd/traefik-log-dashboard@latest
+```
+
+### From Source
+
+```bash
+git clone https://github.com/hhftechnology/traefik-log-dashboard.git
+cd traefik-log-dashboard/cli
+make install
+```
+
+### Binary Releases
+
+Download pre-built binaries for your platform from the [releases page](https://github.com/hhftechnology/traefik-log-dashboard/releases).
+
+## Usage
+
+### Quick Start with Demo Data
+
+```bash
+traefik-log-dashboard --demo
+```
+
+### Read from Log File
+
+```bash
+traefik-log-dashboard --file /var/log/traefik/access.log
+```
+
+### Connect to Traefik Log Dashboard Agent
+
+```bash
+traefik-log-dashboard --url http://localhost:5000
+```
+
+### All Options
+
+```bash
+traefik-log-dashboard [OPTIONS]
+
+Options:
+  --file PATH         Path to Traefik access log file
+  --url URL           URL of Traefik Log Dashboard Agent (default: http://localhost:5000)
+  --demo              Run with demo data
+  --period DURATION   Time period to analyze (default: 1h)
+                      Examples: 5m, 1h, 24h, 7d
+  --refresh DURATION  Dashboard refresh interval (default: 5s)
+  --help              Show help message
+  --version           Show version information
+```
+
+## Dashboard Cards
+
+The CLI dashboard includes the following cards:
+
+### Request Metrics
+
+- Total requests in the selected period
+- Requests per second
+- Trends and sparklines
+
+###  Response Time
+
+- Average response time
+- P95 and P99 percentiles
+- Response time distribution
+
+### Status Codes
+
+- 2xx, 3xx, 4xx, 5xx breakdown
+- Visual pie chart representation
+- Percentage distribution
+
+### Top Routes
+
+- Most requested routes
+- Request counts and percentages
+- Average response times
+
+### Backends/Services
+
+- Service performance metrics
+- Request counts and error rates
+- Average response times
+
+### Routers
+
+- Router performance metrics
+- Traffic distribution
+- Error rates
+
+### Recent Errors
+
+- Latest error entries (4xx, 5xx)
+- Timestamp, status code, and request details
+- Router and service information
+
+### Request Timeline
+
+- Visual sparkline of request activity
+- Time-based request distribution
+- Peak and average rates
+
+### System Resources
+
+- CPU usage
+- Memory usage
+- Disk usage
+- Health recommendations
+
+### Geographic Distribution
+
+- Request origins by country
+- Top countries by request count
+
+## Keyboard Controls
+
+- `q` or `Ctrl+C` - Quit the application
+- `r` - Refresh data
+- `↑`/`↓` or `j`/`k` - Scroll through logs (when in detail view)
+- `h` - Show help
+- `1-9` - Switch between different time periods
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Agent URL
+export TRAEFIK_LOG_DASHBOARD_AGENT_URL=http://localhost:5000
+
+# Agent authentication token
+export TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN=your-secret-token
+
+# Log file path (for file mode)
+export TRAEFIK_LOG_DASHBOARD_ACCESS_PATH=/var/log/traefik/access.log
+```
+
+### Log Format Support
+
+The CLI supports both JSON and Common Log Format (CLF) Traefik logs.
+
+## Integration with Traefik Log Dashboard Agent
+
+For the best experience, connect the CLI to the Traefik Log Dashboard Agent:
+
+1. Start the agent:
+
+```bash
+cd agent
+make run
+```
+
+2. Connect the CLI:
+
+```bash
+traefik-log-dashboard --url http://localhost:5000
+```
+
+The agent provides additional features:
+
+- System resource monitoring
+- Real-time log streaming
+- Compressed log support

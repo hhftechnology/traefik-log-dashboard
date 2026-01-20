@@ -68,18 +68,11 @@ func GetQueryParamBool(r *http.Request, key string, defaultValue bool) bool {
 	if value == "" {
 		return defaultValue
 	}
-	
+
 	boolValue, err := strconv.ParseBool(value)
 	if err != nil {
 		return defaultValue
 	}
-	
-	return boolValue
-}
 
-// EnableCORS adds CORS headers to the response
-func EnableCORS(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	return boolValue
 }

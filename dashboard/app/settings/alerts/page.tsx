@@ -21,6 +21,7 @@ import { Webhook, AlertRule } from '@/lib/types/alerting';
 import { Agent } from '@/lib/types/agent';
 import WebhookFormModal from '@/components/WebhookFormModal';
 import AlertRuleFormModal from '@/components/AlertRuleFormModal';
+import { buildUrl } from '@/lib/utils/base-url';
 
 type TabType = 'webhooks' | 'alerts';
 
@@ -49,10 +50,10 @@ export default function AlertsSettingsPage() {
     try {
       setLoading(true);
       const [webhooksRes, alertsRes, agentsRes, statsRes] = await Promise.all([
-        fetch('/api/webhooks'),
-        fetch('/api/alerts'),
-        fetch('/api/agents'),
-        fetch('/api/alerts/stats'),
+        fetch(buildUrl('/api/webhooks')),
+        fetch(buildUrl('/api/alerts')),
+        fetch(buildUrl('/api/agents')),
+        fetch(buildUrl('/api/alerts/stats')),
       ]);
 
       if (webhooksRes.ok) {
@@ -101,7 +102,7 @@ export default function AlertsSettingsPage() {
         ? { id: editingWebhook.id, ...webhookData }
         : webhookData;
 
-      const response = await fetch(url, {
+      const response = await fetch(buildUrl(url), {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -122,7 +123,7 @@ export default function AlertsSettingsPage() {
   const handleTestWebhook = async (webhookId: string) => {
     setTestingWebhook(webhookId);
     try {
-      const response = await fetch('/api/webhooks/test', {
+      const response = await fetch(buildUrl('/api/webhooks/test'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ webhook_id: webhookId }),
@@ -135,7 +136,7 @@ export default function AlertsSettingsPage() {
       } else {
         toast.error('Test failed: ' + data.error);
       }
-    } catch (_error) {
+    } catch {
       toast.error('Failed to test webhook');
     } finally {
       setTestingWebhook(null);
@@ -144,7 +145,7 @@ export default function AlertsSettingsPage() {
 
   const handleToggleWebhook = async (webhook: Webhook) => {
     try {
-      const response = await fetch('/api/webhooks', {
+      const response = await fetch(buildUrl('/api/webhooks'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -157,7 +158,7 @@ export default function AlertsSettingsPage() {
         toast.success(`Webhook ${!webhook.enabled ? 'enabled' : 'disabled'}`);
         fetchData();
       }
-    } catch (_error) {
+    } catch {
       toast.error('Failed to update webhook');
     }
   };
@@ -166,7 +167,7 @@ export default function AlertsSettingsPage() {
     if (!confirm(`Delete webhook "${webhook.name}"?`)) return;
 
     try {
-      const response = await fetch(`/api/webhooks?id=${webhook.id}`, {
+      const response = await fetch(buildUrl(`/api/webhooks?id=${webhook.id}`), {
         method: 'DELETE',
       });
 
@@ -174,7 +175,7 @@ export default function AlertsSettingsPage() {
         toast.success('Webhook deleted');
         fetchData();
       }
-    } catch (_error) {
+    } catch {
       toast.error('Failed to delete webhook');
     }
   };
@@ -198,7 +199,7 @@ export default function AlertsSettingsPage() {
         ? { id: editingAlert.id, ...alertData }
         : alertData;
 
-      const response = await fetch(url, {
+      const response = await fetch(buildUrl(url), {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -219,7 +220,7 @@ export default function AlertsSettingsPage() {
 
   const handleToggleAlert = async (alert: AlertRule) => {
     try {
-      const response = await fetch('/api/alerts', {
+      const response = await fetch(buildUrl('/api/alerts'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -232,7 +233,7 @@ export default function AlertsSettingsPage() {
         toast.success(`Alert ${!alert.enabled ? 'enabled' : 'disabled'}`);
         fetchData();
       }
-    } catch (_error) {
+    } catch {
       toast.error('Failed to update alert');
     }
   };
@@ -251,7 +252,7 @@ export default function AlertsSettingsPage() {
         return;
       }
 
-      const response = await fetch('/api/alerts/test-trigger', {
+      const response = await fetch(buildUrl('/api/alerts/test-trigger'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -268,7 +269,7 @@ export default function AlertsSettingsPage() {
       } else {
         toast.error('Test failed: ' + data.error);
       }
-    } catch (_error) {
+    } catch {
       toast.error('Failed to test alert');
     } finally {
       setTestingAlert(null);
@@ -287,28 +288,28 @@ export default function AlertsSettingsPage() {
         toast.success('Alert rule deleted');
         fetchData();
       }
-    } catch (_error) {
+    } catch {
       toast.error('Failed to delete alert rule');
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
           <Link
             href="/settings"
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-accent rounded-lg transition-colors"
           >
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
+            <ChevronLeft className="w-5 h-5 text-muted-foreground" />
           </Link>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <Bell className="w-8 h-8 text-red-600" />
+            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
+              <Bell className="w-8 h-8 text-red-600 dark:text-red-400" />
               Alert Configuration
             </h1>
-            <p className="text-gray-600 mt-1">
+            <p className="text-muted-foreground mt-1">
               Manage webhooks and alert rules for notifications
             </p>
           </div>
@@ -316,32 +317,32 @@ export default function AlertsSettingsPage() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white p-4 rounded-lg border border-red-200 shadow-sm">
-            <div className="text-sm text-gray-500 mb-1">Total Alerts</div>
-            <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
+          <div className="bg-card p-4 rounded-lg border border-red-200 dark:border-red-800 shadow-sm">
+            <div className="text-sm text-muted-foreground mb-1">Total Alerts</div>
+            <div className="text-2xl font-bold text-foreground">{stats.total}</div>
           </div>
-          <div className="bg-white p-4 rounded-lg border border-red-200 shadow-sm">
-            <div className="text-sm text-gray-500 mb-1">Last 24 Hours</div>
-            <div className="text-2xl font-bold text-gray-900">{stats.last24h}</div>
+          <div className="bg-card p-4 rounded-lg border border-red-200 dark:border-red-800 shadow-sm">
+            <div className="text-sm text-muted-foreground mb-1">Last 24 Hours</div>
+            <div className="text-2xl font-bold text-foreground">{stats.last24h}</div>
           </div>
-          <div className="bg-white p-4 rounded-lg border border-red-200 shadow-sm">
-            <div className="text-sm text-gray-500 mb-1">Successful</div>
-            <div className="text-2xl font-bold text-green-600">{stats.success}</div>
+          <div className="bg-card p-4 rounded-lg border border-red-200 dark:border-red-800 shadow-sm">
+            <div className="text-sm text-muted-foreground mb-1">Successful</div>
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.success}</div>
           </div>
-          <div className="bg-white p-4 rounded-lg border border-red-200 shadow-sm">
-            <div className="text-sm text-gray-500 mb-1">Failed</div>
-            <div className="text-2xl font-bold text-red-600">{stats.failed}</div>
+          <div className="bg-card p-4 rounded-lg border border-red-200 dark:border-red-800 shadow-sm">
+            <div className="text-sm text-muted-foreground mb-1">Failed</div>
+            <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.failed}</div>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center gap-2 mb-6 border-b border-gray-200">
+        <div className="flex items-center gap-2 mb-6 border-b border-border">
           <button
             onClick={() => setActiveTab('webhooks')}
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'webhooks'
-                ? 'text-red-600 border-b-2 border-red-600'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'text-red-600 dark:text-red-400 border-b-2 border-red-600 dark:border-red-400'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -353,8 +354,8 @@ export default function AlertsSettingsPage() {
             onClick={() => setActiveTab('alerts')}
             className={`px-4 py-2 font-medium transition-colors ${
               activeTab === 'alerts'
-                ? 'text-red-600 border-b-2 border-red-600'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'text-red-600 dark:text-red-400 border-b-2 border-red-600 dark:border-red-400'
+                : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <div className="flex items-center gap-2">
@@ -368,7 +369,7 @@ export default function AlertsSettingsPage() {
       {activeTab === 'webhooks' && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               Configure Discord and Telegram webhooks for notifications
             </p>
             <Button onClick={handleAddWebhook}>
@@ -378,12 +379,12 @@ export default function AlertsSettingsPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-12 text-gray-500">Loading...</div>
+            <div className="text-center py-12 text-muted-foreground">Loading...</div>
           ) : webhooks.length === 0 ? (
-            <div className="text-center py-12 border-2 border-dashed border-red-200 rounded-lg bg-white">
-              <WebhookIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No webhooks configured</h3>
-              <p className="text-gray-500 mb-4">Add a webhook to start receiving notifications</p>
+            <div className="text-center py-12 border-2 border-dashed border-red-200 dark:border-red-800 rounded-lg bg-card">
+              <WebhookIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No webhooks configured</h3>
+              <p className="text-muted-foreground mb-4">Add a webhook to start receiving notifications</p>
               <Button onClick={handleAddWebhook} className="bg-red-600 hover:bg-red-700">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Your First Webhook
@@ -394,7 +395,7 @@ export default function AlertsSettingsPage() {
               {webhooks.map((webhook) => (
                 <div
                   key={webhook.id}
-                  className="border-2 border-red-200 rounded-lg p-4 hover:border-red-500 transition-all bg-white hover:shadow-lg"
+                  className="border-2 border-red-200 dark:border-red-800 rounded-lg p-4 hover:border-red-500 dark:hover:border-red-600 transition-all bg-card hover:shadow-lg"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -404,15 +405,15 @@ export default function AlertsSettingsPage() {
                           {webhook.type}
                         </Badge>
                         {webhook.enabled ? (
-                          <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          <CheckCircle2 className="w-4 h-4 text-green-500 dark:text-green-400" />
                         ) : (
-                          <XCircle className="w-4 h-4 text-gray-400" />
+                          <XCircle className="w-4 h-4 text-muted-foreground" />
                         )}
                       </div>
                       {webhook.description && (
-                        <p className="text-sm text-gray-600 mb-2">{webhook.description}</p>
+                        <p className="text-sm text-muted-foreground mb-2">{webhook.description}</p>
                       )}
-                      <p className="text-xs text-gray-500 font-mono truncate max-w-md">
+                      <p className="text-xs text-muted-foreground font-mono truncate max-w-md">
                         {webhook.url}
                       </p>
                     </div>
@@ -460,7 +461,7 @@ export default function AlertsSettingsPage() {
       {activeTab === 'alerts' && (
         <div>
           <div className="flex justify-between items-center mb-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-muted-foreground">
               Configure alert rules to trigger notifications based on metrics
             </p>
             <Button onClick={handleAddAlert}>
@@ -470,12 +471,12 @@ export default function AlertsSettingsPage() {
           </div>
 
           {loading ? (
-            <div className="text-center py-12 text-gray-500">Loading...</div>
+            <div className="text-center py-12 text-muted-foreground">Loading...</div>
           ) : alerts.length === 0 ? (
-            <div className="text-center py-12 border-2 border-dashed border-red-200 rounded-lg bg-white">
-              <AlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No alert rules configured</h3>
-              <p className="text-gray-500 mb-4">Create an alert rule to start monitoring your traffic</p>
+            <div className="text-center py-12 border-2 border-dashed border-red-200 dark:border-red-800 rounded-lg bg-card">
+              <AlertTriangle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No alert rules configured</h3>
+              <p className="text-muted-foreground mb-4">Create an alert rule to start monitoring your traffic</p>
               <Button onClick={handleAddAlert} className="bg-red-600 hover:bg-red-700">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Your First Alert Rule
@@ -486,7 +487,7 @@ export default function AlertsSettingsPage() {
               {alerts.map((alert) => (
                 <div
                   key={alert.id}
-                  className="border-2 border-red-200 rounded-lg p-4 hover:border-red-500 transition-all bg-white hover:shadow-lg"
+                  className="border-2 border-red-200 dark:border-red-800 rounded-lg p-4 hover:border-red-500 dark:hover:border-red-600 transition-all bg-card hover:shadow-lg"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -495,15 +496,15 @@ export default function AlertsSettingsPage() {
                         <Badge>{alert.trigger_type}</Badge>
                         {alert.interval && <Badge variant="outline">{alert.interval}</Badge>}
                         {alert.enabled ? (
-                          <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          <CheckCircle2 className="w-4 h-4 text-green-500 dark:text-green-400" />
                         ) : (
-                          <XCircle className="w-4 h-4 text-gray-400" />
+                          <XCircle className="w-4 h-4 text-muted-foreground" />
                         )}
                       </div>
                       {alert.description && (
-                        <p className="text-sm text-gray-600 mb-2">{alert.description}</p>
+                        <p className="text-sm text-muted-foreground mb-2">{alert.description}</p>
                       )}
-                      <div className="flex gap-2 text-xs text-gray-500">
+                      <div className="flex gap-2 text-xs text-muted-foreground">
                         <span>{alert.webhook_ids.length} webhook(s)</span>
                         <span>•</span>
                         <span>{alert.parameters.filter(p => p.enabled).length} parameter(s)</span>

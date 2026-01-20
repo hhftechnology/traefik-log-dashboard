@@ -1,0 +1,141 @@
+---
+title: Agent
+description: A lightweight Go service for parsing and streaming Traefik logs in real-time.
+---
+
+A lightweight Go service for parsing and streaming Traefik logs in real-time.
+
+## Features
+
+- High-performance log parsing with Go
+- Support for JSON and Common Log Format (CLF)
+- Position tracking (only reads new entries)
+- Compressed (.gz) log file support
+- System resource monitoring (CPU, memory, disk)
+- Bearer token authentication
+- RESTful API endpoints
+
+## Deployment
+
+### Docker (Recommended)
+
+```bash
+docker run -d \
+  -p 5000:5000 \
+  -v /var/log/traefik:/logs:ro \
+  -v ./data/positions:/data \
+  -e TRAEFIK_LOG_DASHBOARD_ACCESS_PATH=/logs/access.log \
+  -e TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN=your-secret-token \
+  -e TRAEFIK_LOG_DASHBOARD_SYSTEM_MONITORING=true \
+  hhftechnology/traefik-log-dashboard-agent:latest
+```
+
+### Binary Deployment
+
+```bash
+git clone https://github.com/hhftechnology/traefik-log-dashboard.git
+cd traefik-log-dashboard/agent
+
+make
+# or...
+go build -o bin/agent ./cmd/agent
+
+scp bin/agent user@yourserver:/usr/local/bin/
+ssh user@yourserver
+chmod +x /usr/local/bin/agent
+```
+
+## Configuration
+
+### Log Paths
+
+Set the path to your Traefik logs using environment variables:
+
+```bash
+# Single file
+TRAEFIK_LOG_DASHBOARD_ACCESS_PATH=/var/log/traefik/access.log
+TRAEFIK_LOG_DASHBOARD_ERROR_PATH=/var/log/traefik/traefik.log
+
+# Or directory (all .log and .gz files)
+TRAEFIK_LOG_DASHBOARD_ACCESS_PATH=/var/log/traefik
+```
+
+When pointing to a directory:
+- All `.log` files are read
+- Compressed `.gz` files are supported
+- Error logs are auto-detected if they contain "error" in the filename
+
+### Port
+
+The default port is `5000`. Override with:
+
+```bash
+PORT=8080
+```
+
+### System Monitoring
+
+Enable CPU, memory, and disk usage monitoring:
+
+```bash
+TRAEFIK_LOG_DASHBOARD_SYSTEM_MONITORING=true
+TRAEFIK_LOG_DASHBOARD_MONITOR_INTERVAL=2000  # milliseconds
+```
+
+### Authentication
+
+Set a secure authentication token:
+
+```bash
+TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN=your-secret-token
+```
+
+The agent validates the Bearer token in the `Authorization` header for all API requests.
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/logs/access` | GET | Fetch access logs |
+| `/api/logs/error` | GET | Fetch error logs |
+| `/api/logs/status` | GET | Agent status and health |
+| `/api/system/resources` | GET | CPU, memory, disk usage |
+| `/api/system/logs` | GET | Log file sizes |
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `position` | int64 | Read from this byte position |
+| `includeCompressed` | bool | Include .gz files |
+
+## Health Check
+
+The agent exposes a health endpoint for container orchestration:
+
+```yaml
+healthcheck:
+  test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5000/api/logs/status"]
+  interval: 2m
+  timeout: 10s
+  retries: 3
+  start_period: 30s
+```
+
+## Security
+
+### HTTPS
+
+Deploy behind a reverse proxy with TLS for production:
+
+```yaml
+# Traefik labels example
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.agent.rule=Host(`agent.example.com`)"
+  - "traefik.http.routers.agent.tls=true"
+```
+
+### Token Authentication
+
+Always set `TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN` in production. The dashboard and agent must use the same token.

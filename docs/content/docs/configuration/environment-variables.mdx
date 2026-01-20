@@ -1,0 +1,136 @@
+---
+title: Environment Variables
+description: Complete list of environment variables
+---
+
+## Agent Environment Variables
+
+The agent is a lightweight Go service that reads and serves Traefik logs.
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `TRAEFIK_LOG_DASHBOARD_ACCESS_PATH` | Path to Traefik access log file or directory | `/var/log/traefik/access.log` | Yes |
+| `TRAEFIK_LOG_DASHBOARD_ERROR_PATH` | Path to Traefik error log file or directory | `/var/log/traefik/traefik.log` | No |
+| `TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN` | Bearer token for authentication | - | Yes |
+| `TRAEFIK_LOG_DASHBOARD_LOG_FORMAT` | Log format (`json` or `common`) | `json` | No |
+| `TRAEFIK_LOG_DASHBOARD_SYSTEM_MONITORING` | Enable CPU/memory/disk monitoring | `true` | No |
+| `TRAEFIK_LOG_DASHBOARD_MONITOR_INTERVAL` | System monitoring interval (ms) | `2000` | No |
+| `POSITION_FILE` | File to store log read positions | `/data/.position` | No |
+| `PORT` | Agent listen port | `5000` | No |
+
+### Example Agent Configuration
+
+```yaml
+environment:
+  - TRAEFIK_LOG_DASHBOARD_ACCESS_PATH=/logs/access.log
+  - TRAEFIK_LOG_DASHBOARD_ERROR_PATH=/logs/traefik.log
+  - TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN=your-secret-token
+  - TRAEFIK_LOG_DASHBOARD_SYSTEM_MONITORING=true
+  - TRAEFIK_LOG_DASHBOARD_LOG_FORMAT=json
+  - PORT=5000
+```
+
+## Dashboard Environment Variables
+
+The dashboard is a Next.js application that displays analytics from agents.
+
+### Agent Connection
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `AGENT_API_URL` | Default agent URL (environment agent) | - | Yes |
+| `AGENT_API_TOKEN` | Default agent token (environment agent) | - | Yes |
+| `AGENT_NAME` | Display name for environment agent | `Environment Agent` | No |
+
+> **Note**: The agent defined by `AGENT_API_URL` and `AGENT_API_TOKEN` is the **Environment Agent**. This agent cannot be deleted from the UI and acts as the primary connection.
+
+### Display Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `NEXT_PUBLIC_SHOW_DEMO_PAGE` | Show demo mode link in navigation | `true` | No |
+| `NEXT_PUBLIC_MAX_LOGS_DISPLAY` | Maximum logs to display in table | `500` | No |
+
+### GeoIP Configuration
+
+Geographic IP lookup is handled by the **dashboard** using the [geolite2-redist](https://www.npmjs.com/package/geolite2-redist) npm package, which automatically downloads MaxMind GeoLite2 databases.
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `GEOIP_DB_PATH` | Override path to GeoLite2-City.mmdb | Auto-downloaded | No |
+
+> **Note**: GeoIP databases are automatically included in the dashboard Docker image. You only need to set `GEOIP_DB_PATH` if you want to use a custom database location.
+
+### Server Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `NODE_ENV` | Node environment | `production` | No |
+| `PORT` | Dashboard listen port | `3000` | No |
+| `DATABASE_PATH` | SQLite database location | `./data/agents.db` | No |
+
+### Security Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `ALLOWED_ORIGINS` | CORS allowed origins (comma-separated) | `*` | No |
+| `ENABLE_BACKGROUND_SCHEDULER` | Enable background metrics processing | `true` | No |
+
+### Example Dashboard Configuration
+
+```yaml
+environment:
+  # Agent Connection
+  - AGENT_API_URL=http://traefik-agent:5000
+  - AGENT_API_TOKEN=your-secret-token
+  - AGENT_NAME=Production Agent
+
+  # Display
+  - NEXT_PUBLIC_SHOW_DEMO_PAGE=true
+  - NEXT_PUBLIC_MAX_LOGS_DISPLAY=500
+
+  # Server
+  - NODE_ENV=production
+  - PORT=3000
+```
+
+## CLI Environment Variables
+
+The CLI is a terminal-based dashboard application.
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `TRAEFIK_LOG_DASHBOARD_ACCESS_PATH` | Path to Traefik access log | - | Yes (file mode) |
+| `TRAEFIK_LOG_DASHBOARD_AGENT_URL` | Agent API URL | - | Yes (agent mode) |
+| `TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN` | Agent authentication token | - | Yes (agent mode) |
+
+## Complete Docker Compose Example
+
+```yaml
+services:
+  traefik-agent:
+    image: hhftechnology/traefik-log-dashboard-agent:latest
+    environment:
+      - TRAEFIK_LOG_DASHBOARD_ACCESS_PATH=/logs/access.log
+      - TRAEFIK_LOG_DASHBOARD_ERROR_PATH=/logs/traefik.log
+      - TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN=your-secret-token
+      - TRAEFIK_LOG_DASHBOARD_SYSTEM_MONITORING=true
+      - TRAEFIK_LOG_DASHBOARD_LOG_FORMAT=json
+      - PORT=5000
+    volumes:
+      - /var/log/traefik:/logs:ro
+      - ./data/positions:/data
+
+  traefik-dashboard:
+    image: hhftechnology/traefik-log-dashboard:latest
+    environment:
+      - AGENT_API_URL=http://traefik-agent:5000
+      - AGENT_API_TOKEN=your-secret-token
+      - AGENT_NAME=Production Agent
+      - NODE_ENV=production
+      - PORT=3000
+    volumes:
+      - ./data/dashboard:/app/data
+    depends_on:
+      - traefik-agent
+```

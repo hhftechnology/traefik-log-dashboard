@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // eslint-disable-next-line no-console
     console.log(`Fetching from agent [${agent.name}]:`, `${agent.url}/api/logs/access?position=${position}&lines=${lines}&tail=${tail}`);
 
     const headers: HeadersInit = {
@@ -62,7 +63,10 @@ export async function GET(request: NextRequest) {
 
     const data = await response.json();
 
-    console.log(`Agent [${agent.name}] returned`, data.logs?.length || 0, 'logs');
+    // Log agent response for debugging (using console.warn for non-critical info)
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`Agent [${agent.name}] returned`, data.logs?.length || 0, 'logs');
+    }
 
     // Add agent info to response
     const responseData = {

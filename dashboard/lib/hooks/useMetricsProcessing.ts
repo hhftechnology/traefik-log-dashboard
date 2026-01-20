@@ -1,5 +1,6 @@
 // Custom hook for processing metrics with alert, snapshot, and archival services
 import { useEffect, useRef } from 'react';
+import { buildUrl } from '@/lib/utils/base-url';
 import { DashboardMetrics, TraefikLog } from '../types';
 
 interface UseMetricsProcessingOptions {
@@ -18,7 +19,8 @@ export function useMetricsProcessing(
   logs: TraefikLog[] | null,
   options: UseMetricsProcessingOptions = {}
 ) {
-  const { enabled = true, debounceMs = 5000 } = options;
+  // PERFORMANCE FIX: Increased default debounce from 5s to 10s to match new polling intervals
+  const { enabled = true, debounceMs = 10000 } = options;
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastProcessedRef = useRef<string>('');
 
@@ -33,12 +35,13 @@ export function useMetricsProcessing(
       return;
     }
 
-    // Create a hash of the current metrics to avoid duplicate processing
+    // PERFORMANCE FIX: Create a hash of current metrics WITHOUT timestamp
+    // Including timestamp caused every call to be treated as new (defeating deduplication)
     const metricsHash = JSON.stringify({
       agentId,
       requestCount: metrics.requests?.total,
       errorRate: metrics.statusCodes?.errorRate,
-      timestamp: Date.now(),
+      avgResponseTime: metrics.responseTime?.average,
     });
 
     // Skip if we just processed the same metrics
@@ -49,7 +52,7 @@ export function useMetricsProcessing(
     // Debounce the processing
     timeoutRef.current = setTimeout(async () => {
       try {
-        await fetch('/api/services/process-metrics', {
+        await fetch(buildUrl('/api/services/process-metrics'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -23,18 +23,24 @@ export class ArchivalService {
    * Start the archival service
    */
   start(): void {
-    console.log('Starting Historical Data Archival Service...');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Starting Historical Data Archival Service...');
+    }
 
     const config = getHistoricalConfig();
 
     if (!config.enabled) {
-      console.log('Historical data storage is disabled');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Historical data storage is disabled');
+      }
       return;
     }
 
-    console.log(
-      `Archival Service configured: interval=${config.archive_interval}min, retention=${config.retention_days}days`
-    );
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        `Archival Service configured: interval=${config.archive_interval}min, retention=${config.retention_days}days`
+      );
+    }
 
     // Start archival interval
     this.archivalInterval = setInterval(
@@ -51,14 +57,18 @@ export class ArchivalService {
     // Initial archive on startup (after 30 seconds to allow metrics to populate)
     setTimeout(() => this.archiveMetrics(), 30000);
 
-    console.log('✓ Archival Service started successfully');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('✓ Archival Service started successfully');
+    }
   }
 
   /**
    * Stop the archival service
    */
   stop(): void {
-    console.log('Stopping Historical Data Archival Service...');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Stopping Historical Data Archival Service...');
+    }
 
     if (this.archivalInterval) {
       clearInterval(this.archivalInterval);
@@ -72,7 +82,9 @@ export class ArchivalService {
 
     this.metricsCache.clear();
 
-    console.log('✓ Archival Service stopped');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('✓ Archival Service stopped');
+    }
   }
 
   /**
@@ -93,8 +105,17 @@ export class ArchivalService {
   /**
    * Update metrics cache for an agent
    * This should be called from the dashboard when metrics are calculated
+   * CONCURRENCY FIX: Safe write operation
    */
   updateMetricsCache(agentId: string, metrics: DashboardMetrics): void {
+    // Defensive: limit cache size to prevent memory leaks
+    if (this.metricsCache.size > 100) {
+      // Remove oldest entry (simple FIFO, could be improved with LRU)
+      const firstKey = this.metricsCache.keys().next().value;
+      if (firstKey) {
+        this.metricsCache.delete(firstKey);
+      }
+    }
     this.metricsCache.set(agentId, metrics);
   }
 
@@ -110,7 +131,9 @@ export class ArchivalService {
    */
   private async archiveMetrics(): Promise<void> {
     if (this.isArchiving) {
-      console.log('Archival already in progress, skipping...');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Archival already in progress, skipping...');
+      }
       return;
     }
 
@@ -120,7 +143,9 @@ export class ArchivalService {
       const config = getHistoricalConfig();
 
       if (!config.enabled) {
-        console.log('Historical data storage is disabled, stopping service');
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Historical data storage is disabled, stopping service');
+        }
         this.stop();
         return;
       }
@@ -133,7 +158,9 @@ export class ArchivalService {
           const metrics = this.metricsCache.get(agent.id);
 
           if (!metrics) {
-            console.log(`No metrics cached for agent ${agent.name} (${agent.id}), skipping`);
+            if (process.env.NODE_ENV === 'development') {
+              console.warn(`No metrics cached for agent ${agent.name} (${agent.id}), skipping`);
+            }
             continue;
           }
 
@@ -141,16 +168,22 @@ export class ArchivalService {
           addHistoricalData(agent.id, metrics);
           archivedCount++;
 
-          console.log(`✓ Archived metrics for agent: ${agent.name}`);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn(`✓ Archived metrics for agent: ${agent.name}`);
+          }
         } catch (error) {
           console.error(`Failed to archive metrics for agent ${agent.id}:`, error);
         }
       }
 
       if (archivedCount > 0) {
-        console.log(`✓ Successfully archived metrics for ${archivedCount} agent(s)`);
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`✓ Successfully archived metrics for ${archivedCount} agent(s)`);
+        }
       } else {
-        console.log('No metrics were archived (no cached data available)');
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('No metrics were archived (no cached data available)');
+        }
       }
     } catch (error) {
       console.error('Error during archival:', error);
@@ -164,14 +197,20 @@ export class ArchivalService {
    */
   private async performCleanup(): Promise<void> {
     try {
-      console.log('Running historical data cleanup...');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Running historical data cleanup...');
+      }
 
       const deletedCount = cleanupHistoricalData();
 
       if (deletedCount > 0) {
-        console.log(`✓ Cleaned up ${deletedCount} old historical entries`);
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`✓ Cleaned up ${deletedCount} old historical entries`);
+        }
       } else {
-        console.log('No old entries to clean up');
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('No old entries to clean up');
+        }
       }
     } catch (error) {
       console.error('Error during cleanup:', error);
@@ -182,7 +221,9 @@ export class ArchivalService {
    * Manually trigger archival (useful for testing)
    */
   async triggerArchival(): Promise<void> {
-    console.log('Manual archival triggered');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Manual archival triggered');
+    }
     await this.archiveMetrics();
   }
 
@@ -190,7 +231,9 @@ export class ArchivalService {
    * Manually trigger cleanup (useful for testing)
    */
   async triggerCleanup(): Promise<void> {
-    console.log('Manual cleanup triggered');
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Manual cleanup triggered');
+    }
     await this.performCleanup();
   }
 

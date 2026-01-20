@@ -1,0 +1,79 @@
+---
+title: Settings
+description: General dashboard settings
+---
+
+## Agent Database Management
+
+### Database Schema
+
+The dashboard uses SQLite to persist agent configurations:
+
+```sql
+CREATE TABLE agents (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  url TEXT NOT NULL,
+  token TEXT NOT NULL,
+  location TEXT NOT NULL,
+  number INTEGER NOT NULL,
+  status TEXT,
+  last_seen TEXT,
+  description TEXT,
+  tags TEXT,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+```
+
+### Database Location
+
+By default: `./data/dashboard/agents.db`
+
+Custom path:
+```yaml
+traefik-dashboard:
+  environment:
+    - DATABASE_PATH=/custom/path/agents.db
+```
+
+### Backup and Restore
+
+**Backup:**
+```bash
+# Copy the database file
+cp ./data/dashboard/agents.db ./backups/agents-$(date +%Y%m%d).db
+```
+
+**Restore:**
+```bash
+# Stop dashboard
+docker compose stop traefik-dashboard
+
+# Restore database
+cp ./backups/agents-20250101.db ./data/dashboard/agents.db
+
+# Start dashboard
+docker compose start traefik-dashboard
+```
+
+## Historical Data Storage
+
+### Enabling Via UI
+1. Navigate to **Settings** → **Historical Data**
+2. Click **Enable** toggle
+3. Set **Retention Period** (e.g., 90 days)
+4. Set **Archive Interval** (e.g., 60 minutes)
+5. Click **Save Configuration**
+
+### Enabling Via API
+```bash
+curl -X PATCH http://localhost:3000/api/historical/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "enabled": true,
+    "retention_days": 90,
+    "archive_interval": 60
+  }'
+```

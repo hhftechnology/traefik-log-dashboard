@@ -1,41 +1,38 @@
 # ==============================================================================
 # Stage 1: Dependencies
 # ==============================================================================
-FROM node:22-slim AS deps
+FROM node:22-alpine AS deps
 
 WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 make g++ && \
-    rm -rf /var/lib/apt/lists/*
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++
 
 COPY package.json package-lock.json* ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci && npm cache clean --force
 
 # ==============================================================================
 # Stage 2: Builder
 # ==============================================================================
-FROM node:22-slim AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3 make g++ && \
-    rm -rf /var/lib/apt/lists/*
+# Install build dependencies for native modules (better-sqlite3)
+RUN apk add --no-cache python3 make g++
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN npm ci && npm cache clean --force
-
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+
 RUN npm run build
 
 # ==============================================================================
-# Stage 3: Runner
+# Stage 3: Runner (Production)
 # ==============================================================================
-FROM node:22-slim AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
@@ -44,29 +41,39 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Install runtime dependencies including gosu for privilege dropping
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    ca-certificates \
-    gosu \
-    && rm -rf /var/lib/apt/lists/*
+# Install only runtime dependencies
+RUN apk add --no-cache ca-certificates
 
-# Create nodejs user
-RUN groupadd -g 1001 nodejs && \
-    useradd -u 1001 -g nodejs -m nodejs
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nodejs
 
-# Copy built application
+# Copy ONLY the standalone build (includes all dependencies)
 COPY --from=builder --chown=nodejs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nodejs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nodejs:nodejs /app/public ./public
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
+
+# GeoIP: geolite2-redist downloads databases on first use (lazy loading)
+# Create geoip directory for runtime database storage
+RUN mkdir -p /app/geoip && chown nodejs:nodejs /app/geoip
+
+# CRITICAL: Copy geolite2-redist package from builder since standalone doesn't include it fully
+# This package needs its full structure to download GeoLite2 databases at runtime
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules/geolite2-redist ./node_modules/geolite2-redist
+
+# Create the directories geolite2-redist needs for database downloads
+RUN mkdir -p /app/node_modules/geolite2-redist/dbs-tmp && \
+    mkdir -p /app/node_modules/geolite2-redist/dbs && \
+    chown -R nodejs:nodejs /app/node_modules/geolite2-redist
 
 # Copy entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
+COPY --chown=nodejs:nodejs docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Create data directory
+# Create data directory for SQLite
 RUN mkdir -p /app/data && chown -R nodejs:nodejs /app/data
+
+USER nodejs
 
 EXPOSE 3000
 

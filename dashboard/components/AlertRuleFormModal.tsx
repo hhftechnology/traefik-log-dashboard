@@ -239,7 +239,7 @@ export default function AlertRuleFormModal({
     }
   };
 
-  const handleInputChange = (field: string, value: any) => {
+  const handleInputChange = (field: string, value: unknown) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => {
@@ -293,15 +293,15 @@ export default function AlertRuleFormModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border-2 border-red-200">
+      <div className="bg-card rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border-2 border-red-200 dark:border-red-800">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
-          <h2 className="text-2xl font-bold text-gray-900">
+        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card z-10">
+          <h2 className="text-2xl font-bold text-foreground">
             {alert ? 'Edit Alert Rule' : 'Create Alert Rule'}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-red-600 transition-colors"
+            className="text-muted-foreground hover:text-red-600 dark:hover:text-red-400 transition-colors"
           >
             <X className="w-6 h-6" />
           </button>
@@ -310,11 +310,11 @@ export default function AlertRuleFormModal({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Basic Information */}
-          <div className="border-2 border-red-200 rounded-lg">
+          <div className="border-2 border-red-200 dark:border-red-800 rounded-lg">
             <button
               type="button"
               onClick={() => toggleSection('basic')}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
+              className="w-full flex items-center justify-between p-4 hover:bg-accent"
             >
               <h3 className="text-lg font-semibold">Basic Information</h3>
               {expandedSection === 'basic' ? (
@@ -325,44 +325,44 @@ export default function AlertRuleFormModal({
             </button>
 
             {expandedSection === 'basic' && (
-              <div className="p-4 border-t border-gray-200 space-y-4">
+              <div className="p-4 border-t border-border space-y-4">
                 {/* Name */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Name <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Name <span className="text-red-500 dark:text-red-400">*</span>
                   </label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={e => handleInputChange('name', e.target.value)}
                     placeholder="e.g., Hourly Traffic Summary"
-                    className={`w-full px-3 py-2 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 ${
-                      errors.name ? 'border-red-500' : 'border-red-200'
+                    className={`w-full px-3 py-2 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-card text-foreground ${
+                      errors.name ? 'border-red-500 dark:border-red-400' : 'border-red-200 dark:border-red-800'
                     }`}
                   />
                   {errors.name && (
-                    <p className="mt-1 text-sm text-red-500">{errors.name}</p>
+                    <p className="mt-1 text-sm text-red-500 dark:text-red-400">{errors.name}</p>
                   )}
                 </div>
 
                 {/* Description */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description <span className="text-gray-400">(optional)</span>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Description <span className="text-muted-foreground">(optional)</span>
                   </label>
                   <textarea
                     value={formData.description}
                     onChange={e => handleInputChange('description', e.target.value)}
                     placeholder="e.g., Send traffic metrics every hour"
                     rows={2}
-                    className="w-full px-3 py-2 border-2 border-red-200 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-3 py-2 border-2 border-red-200 dark:border-red-800 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-card text-foreground"
                   />
                 </div>
 
                 {/* Trigger Type */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Trigger Type <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Trigger Type <span className="text-red-500 dark:text-red-400">*</span>
                   </label>
                   <div className="flex gap-4">
                     <label className="flex items-center cursor-pointer">
@@ -374,7 +374,7 @@ export default function AlertRuleFormModal({
                         className="mr-2"
                       />
                       <Badge variant="default">Interval</Badge>
-                      <span className="ml-2 text-sm text-gray-600">Fixed schedule</span>
+                      <span className="ml-2 text-sm text-muted-foreground">Fixed schedule</span>
                     </label>
                     <label className="flex items-center cursor-pointer">
                       <input
@@ -385,7 +385,7 @@ export default function AlertRuleFormModal({
                         className="mr-2"
                       />
                       <Badge variant="secondary">Threshold</Badge>
-                      <span className="ml-2 text-sm text-gray-600">When metric exceeds value</span>
+                      <span className="ml-2 text-sm text-muted-foreground">When metric exceeds value</span>
                     </label>
                   </div>
                 </div>
@@ -393,13 +393,13 @@ export default function AlertRuleFormModal({
                 {/* Interval (only for interval type) */}
                 {formData.trigger_type === 'interval' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Interval <span className="text-red-500">*</span>
+                    <label className="block text-sm font-medium text-foreground mb-2">
+                      Interval <span className="text-red-500 dark:text-red-400">*</span>
                     </label>
                     <select
                       value={formData.interval}
                       onChange={e => handleInputChange('interval', e.target.value as AlertInterval)}
-                      className="w-full px-3 py-2 border-2 border-red-200 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-3 py-2 border-2 border-red-200 dark:border-red-800 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-card text-foreground"
                     >
                       {INTERVAL_OPTIONS.map(option => (
                         <option key={option.value} value={option.value}>
@@ -412,13 +412,13 @@ export default function AlertRuleFormModal({
 
                 {/* Agent Selection */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Agent <span className="text-gray-400">(optional - all agents if not selected)</span>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Agent <span className="text-muted-foreground">(optional - all agents if not selected)</span>
                   </label>
                   <select
                     value={formData.agent_id || ''}
                     onChange={e => handleInputChange('agent_id', e.target.value || undefined)}
-                    className="w-full px-3 py-2 border-2 border-red-200 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-3 py-2 border-2 border-red-200 dark:border-red-800 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-card text-foreground"
                   >
                     <option value="">All agents</option>
                     {agents.map(agent => (
@@ -438,7 +438,7 @@ export default function AlertRuleFormModal({
                     onChange={e => handleInputChange('enabled', e.target.checked)}
                     className="mr-2 h-4 w-4 text-red-600 border-red-300 rounded focus:ring-red-500"
                   />
-                  <label htmlFor="enabled" className="text-sm font-medium text-gray-700">
+                  <label htmlFor="enabled" className="text-sm font-medium text-foreground">
                     Enable alert rule immediately
                   </label>
                 </div>
@@ -447,11 +447,11 @@ export default function AlertRuleFormModal({
           </div>
 
           {/* Webhook Selection */}
-          <div className="border-2 border-red-200 rounded-lg">
+          <div className="border-2 border-red-200 dark:border-red-800 rounded-lg">
             <button
               type="button"
               onClick={() => toggleSection('webhooks')}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
+              className="w-full flex items-center justify-between p-4 hover:bg-accent"
             >
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-semibold">Webhooks</h3>
@@ -465,9 +465,9 @@ export default function AlertRuleFormModal({
             </button>
 
             {expandedSection === 'webhooks' && (
-              <div className="p-4 border-t border-gray-200">
+              <div className="p-4 border-t border-border">
                 {enabledWebhooks.length === 0 ? (
-                  <p className="text-sm text-gray-500 py-4 text-center">
+                  <p className="text-sm text-muted-foreground py-4 text-center">
                     No webhooks available. Create a webhook first.
                   </p>
                 ) : (
@@ -475,7 +475,7 @@ export default function AlertRuleFormModal({
                     {enabledWebhooks.map(webhook => (
                       <label
                         key={webhook.id}
-                        className="flex items-center p-3 border-2 border-red-200 rounded-lg cursor-pointer hover:bg-gray-50"
+                        className="flex items-center p-3 border-2 border-red-200 dark:border-red-800 rounded-lg cursor-pointer hover:bg-accent"
                       >
                         <input
                           type="checkbox"
@@ -491,7 +491,7 @@ export default function AlertRuleFormModal({
                             </Badge>
                           </div>
                           {webhook.description && (
-                            <p className="text-sm text-gray-500 mt-1">{webhook.description}</p>
+                            <p className="text-sm text-muted-foreground mt-1">{webhook.description}</p>
                           )}
                         </div>
                       </label>
@@ -499,18 +499,18 @@ export default function AlertRuleFormModal({
                   </div>
                 )}
                 {errors.webhooks && (
-                  <p className="mt-2 text-sm text-red-500">{errors.webhooks}</p>
+                  <p className="mt-2 text-sm text-red-500 dark:text-red-400">{errors.webhooks}</p>
                 )}
               </div>
             )}
           </div>
 
           {/* Parameters */}
-          <div className="border-2 border-red-200 rounded-lg">
+          <div className="border-2 border-red-200 dark:border-red-800 rounded-lg">
             <button
               type="button"
               onClick={() => toggleSection('parameters')}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50"
+              className="w-full flex items-center justify-between p-4 hover:bg-accent"
             >
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-semibold">Alert Parameters</h3>
@@ -524,8 +524,8 @@ export default function AlertRuleFormModal({
             </button>
 
             {expandedSection === 'parameters' && (
-              <div className="p-4 border-t border-gray-200">
-                <p className="text-sm text-gray-600 mb-4">
+              <div className="p-4 border-t border-border">
+                <p className="text-sm text-muted-foreground mb-4">
                   Select which metrics to include in alert notifications
                 </p>
 
@@ -535,7 +535,7 @@ export default function AlertRuleFormModal({
                     if (!param) return null;
 
                     return (
-                      <div key={option.parameter} className="border-2 border-red-200 rounded-lg p-3">
+                      <div key={option.parameter} className="border-2 border-red-200 dark:border-red-800 rounded-lg p-3">
                         <label className="flex items-start cursor-pointer">
                           <input
                             type="checkbox"
@@ -545,13 +545,13 @@ export default function AlertRuleFormModal({
                           />
                           <div className="flex-1">
                             <div className="font-medium">{option.label}</div>
-                            <div className="text-sm text-gray-500">{option.description}</div>
+                            <div className="text-sm text-muted-foreground">{option.description}</div>
 
                             {param.enabled && (
                               <div className="mt-2 flex gap-4">
                                 {option.hasLimit && (
                                   <div className="flex items-center gap-2">
-                                    <label className="text-sm text-gray-700">Top:</label>
+                                    <label className="text-sm text-foreground">Top:</label>
                                     <input
                                       type="number"
                                       min="1"
@@ -560,13 +560,13 @@ export default function AlertRuleFormModal({
                                       onChange={e => updateParameter(option.parameter, {
                                         limit: parseInt(e.target.value) || 5
                                       })}
-                                      className="w-16 px-2 py-1 border-2 border-red-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                                      className="w-16 px-2 py-1 border-2 border-red-200 dark:border-red-800 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-card text-foreground"
                                     />
                                   </div>
                                 )}
                                 {option.hasThreshold && formData.trigger_type === 'threshold' && (
                                   <div className="flex items-center gap-2">
-                                    <label className="text-sm text-gray-700">Threshold:</label>
+                                    <label className="text-sm text-foreground">Threshold:</label>
                                     <input
                                       type="number"
                                       step="0.1"
@@ -575,7 +575,7 @@ export default function AlertRuleFormModal({
                                         threshold: parseFloat(e.target.value) || undefined
                                       })}
                                       placeholder="e.g., 5.0"
-                                      className="w-24 px-2 py-1 border-2 border-red-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                                      className="w-24 px-2 py-1 border-2 border-red-200 dark:border-red-800 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-card text-foreground"
                                     />
                                   </div>
                                 )}
@@ -589,20 +589,20 @@ export default function AlertRuleFormModal({
                 </div>
 
                 {errors.parameters && (
-                  <p className="mt-2 text-sm text-red-500">{errors.parameters}</p>
+                  <p className="mt-2 text-sm text-red-500 dark:text-red-400">{errors.parameters}</p>
                 )}
               </div>
             )}
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
+          <div className="flex gap-3 pt-4 border-t border-border">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
               disabled={saving}
-              className="flex-1 border-2 border-red-200 hover:border-red-500"
+              className="flex-1 border-2 border-red-200 dark:border-red-800 hover:border-red-500 dark:hover:border-red-400"
             >
               Cancel
             </Button>

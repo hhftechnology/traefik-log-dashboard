@@ -13,7 +13,11 @@ import { DashboardMetrics } from '../types';
 import { MetricSnapshot } from '../types/metrics-snapshot';
 
 // Track last execution time for each alert rule
+// MEMORY LEAK FIX: TTL-based cleanup to prevent unbounded growth
 const lastExecutionTimes = new Map<string, number>();
+const MAX_CACHE_AGE = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_CACHE_SIZE = 1000; // Maximum number of entries
+const CLEANUP_INTERVAL = 60 * 60 * 1000; // Cleanup every hour
 
 // Track alert execution intervals in milliseconds
 const intervalMap: Record<AlertInterval, number> = {
@@ -25,6 +29,52 @@ const intervalMap: Record<AlertInterval, number> = {
   '12h': 12 * 60 * 60 * 1000,
   '24h': 24 * 60 * 60 * 1000,
 };
+
+// Start periodic cleanup
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+let _cleanupInterval: NodeJS.Timeout | null = null;
+
+/**
+ * Cleanup old entries from lastExecutionTimes map
+ */
+function cleanupExecutionTimes(): void {
+  const now = Date.now();
+  const entriesToDelete: string[] = [];
+
+  // Remove entries older than MAX_CACHE_AGE
+  for (const [alertId, timestamp] of lastExecutionTimes.entries()) {
+    if (now - timestamp > MAX_CACHE_AGE) {
+      entriesToDelete.push(alertId);
+    }
+  }
+
+  entriesToDelete.forEach(id => lastExecutionTimes.delete(id));
+
+  // If still too large, remove oldest entries (LRU strategy)
+  if (lastExecutionTimes.size > MAX_CACHE_SIZE) {
+    const sortedEntries = Array.from(lastExecutionTimes.entries())
+      .sort((a, b) => a[1] - b[1]); // Sort by timestamp (oldest first)
+    
+    const toRemove = sortedEntries.slice(0, lastExecutionTimes.size - MAX_CACHE_SIZE);
+    toRemove.forEach(([id]) => lastExecutionTimes.delete(id));
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[AlertEngine] Cleaned up ${toRemove.length} old execution time entries`);
+    }
+  }
+
+  if (entriesToDelete.length > 0 && process.env.NODE_ENV === 'development') {
+    console.warn(`[AlertEngine] Cleaned up ${entriesToDelete.length} expired execution time entries`);
+  }
+}
+
+// Initialize cleanup interval (only in server context)
+if (typeof window === 'undefined') {
+  _cleanupInterval = setInterval(cleanupExecutionTimes, CLEANUP_INTERVAL);
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('[AlertEngine] Execution times cleanup initialized (runs every hour)');
+  }
+}
 
 /**
  * Alert Evaluation Engine
@@ -42,7 +92,9 @@ export class AlertEngine {
     metrics: DashboardMetrics
   ): Promise<void> {
     if (this.isRunning) {
-      console.log('Alert evaluation already in progress, skipping...');
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Alert evaluation already in progress, skipping...');
+      }
       return;
     }
 
@@ -168,7 +220,9 @@ export class AlertEngine {
     if (alert.trigger_type === 'interval' && alert.interval) {
       const snapshot = getLatestSnapshot(agentId, alert.interval);
       if (snapshot) {
-        console.log(`Using snapshot for interval alert: ${alert.interval}, window: ${snapshot.window_start} to ${snapshot.window_end}`);
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`Using snapshot for interval alert: ${alert.interval}, window: ${snapshot.window_start} to ${snapshot.window_end}`);
+        }
         alertData = this.buildAlertDataFromSnapshot(snapshot);
       } else {
         console.warn(`No snapshot found for interval ${alert.interval}, using live metrics`);
@@ -184,11 +238,15 @@ export class AlertEngine {
       try {
         const webhook = getWebhookById(webhookId);
         if (!webhook || !webhook.enabled) {
-          console.log(`Webhook ${webhookId} not found or disabled, skipping`);
+          if (process.env.NODE_ENV === 'development') {
+          console.warn(`Webhook ${webhookId} not found or disabled, skipping`);
+        }
           continue;
         }
 
-        console.log(`Sending alert "${alert.name}" to webhook "${webhook.name}"`);
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(`Sending alert "${alert.name}" to webhook "${webhook.name}"`);
+        }
 
         const result = await sendNotification(
           webhook,
@@ -208,7 +266,9 @@ export class AlertEngine {
         });
 
         if (result.success) {
-          console.log(`✓ Alert sent successfully to ${webhook.name}`);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn(`✓ Alert sent successfully to ${webhook.name}`);
+          }
         } else {
           console.error(`✗ Failed to send alert to ${webhook.name}: ${result.error}`);
         }
@@ -346,6 +406,25 @@ export class AlertEngine {
    */
   getLastExecutionTime(alertId: string): number | undefined {
     return lastExecutionTimes.get(alertId);
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): { size: number; maxSize: number; oldestEntry: number | null } {
+    const entries = Array.from(lastExecutionTimes.values());
+    return {
+      size: lastExecutionTimes.size,
+      maxSize: MAX_CACHE_SIZE,
+      oldestEntry: entries.length > 0 ? Math.min(...entries) : null,
+    };
+  }
+
+  /**
+   * Manually trigger cleanup
+   */
+  cleanup(): void {
+    cleanupExecutionTimes();
   }
 }
 
