@@ -5,17 +5,16 @@ import {
   addNotificationHistory,
   getEnabledAlertRules,
   getLatestSnapshot,
+  getSnapshotsByTimeRange,
   getWebhookById,
+  deleteSnapshotsAfterAlert,
+  getAlertExecutionState,
+  setAlertExecutionState,
 } from '../db/database';
 import { sendNotification } from './notification-service';
 import { AlertData, AlertInterval, AlertRule } from '../types/alerting';
 import { DashboardMetrics } from '../types';
 import { MetricSnapshot } from '../types/metrics-snapshot';
-
-type AlertExecutionState = {
-  lastTriggeredAt?: number;
-  thresholdActive?: boolean;
-};
 
 type AlertQueueState = {
   inFlight: Promise<void> | null;
@@ -31,19 +30,33 @@ const intervalMap: Record<AlertInterval, number> = {
   '24h': 24 * 60 * 60 * 1000,
 };
 
-const MAX_STATE_AGE_MS = 24 * 60 * 60 * 1000;
-const MAX_STATE_ENTRIES = 2000;
+const DEFAULT_THRESHOLD_WINDOW_MS = 5 * 60 * 1000;
 
-/**
- * Alert Evaluation Engine
- * Evaluates alert rules against current metrics and triggers notifications
- */
+// Empty metrics object used by testFire() so triggerAlert() always has
+// a valid DashboardMetrics to fall back to for payload building.
+const EMPTY_METRICS: DashboardMetrics = {
+  requests:            { total: 0, perSecond: 0, change: 0 },
+  responseTime:        { average: 0, p95: 0, p99: 0, change: 0 },
+  statusCodes:         { status2xx: 0, status3xx: 0, status4xx: 0, status5xx: 0, errorRate: 0 },
+  topRoutes:           [],
+  backends:            [],
+  routers:             [],
+  topRequestAddresses: [],
+  topRequestHosts:     [],
+  topClientIPs:        [],
+  userAgents:          [],
+  timeline:            [],
+  errors:              [],
+  geoLocations:        [],
+  logs:                [],
+};
+
 export class AlertEngine {
-  private executionState = new Map<string, AlertExecutionState>();
   private agentQueues = new Map<string, AlertQueueState>();
 
   /**
-   * Evaluate all enabled alert rules against current metrics
+   * Evaluate all enabled alert rules against current metrics.
+   * Called by the background scheduler on each tick.
    */
   async evaluateAlerts(
     agentId: string,
@@ -69,102 +82,126 @@ export class AlertEngine {
   }
 
   /**
-   * Reset execution times and active threshold states (useful for testing)
+   * Reset persisted execution state for a SINGLE alert rule.
+   * Called by the test-trigger route before testFire() so the alert
+   * is not blocked by its cooldown window.
    */
-  resetExecutionTimes(): void {
-    this.executionState.clear();
+  async resetAlertState(alertId: string): Promise<void> {
+    setAlertExecutionState(alertId, {
+      last_triggered_at: null,
+      threshold_active:  0,
+    });
   }
 
   /**
-   * Get last execution time for an alert
+   * Fire a single alert unconditionally — bypasses threshold evaluation,
+   * snapshot aggregation, and cooldown checks entirely.
+   *
+   * Used exclusively by the test-trigger API route. The caller should
+   * call resetAlertState(alertId) first so the cooldown does not block
+   * the next real evaluation cycle.
    */
-  getLastExecutionTime(alertId: string): number | undefined {
-    return this.executionState.get(alertId)?.lastTriggeredAt;
+  async testFire(
+    alertId:   string,
+    agentId:   string,
+    agentName: string
+  ): Promise<void> {
+    const { getAlertRuleById } = await import('../db/database');
+    const alert = getAlertRuleById(alertId);
+    if (!alert) throw new Error(`Alert rule ${alertId} not found`);
+
+    // Use the latest snapshot as payload if available, otherwise empty metrics.
+    const snapshot = alert.interval
+      ? getLatestSnapshot(agentId, alert.interval)
+      : null;
+
+    const alertData = snapshot
+      ? this.buildAlertDataFromSnapshot(snapshot)
+      : this.buildAlertData(agentId, agentName, EMPTY_METRICS, Date.now());
+
+    for (const webhookId of alert.webhook_ids) {
+      try {
+        const webhook = getWebhookById(webhookId);
+        if (!webhook || !webhook.enabled) continue;
+
+        const result = await sendNotification(
+          webhook, alertData, `[TEST] ${alert.name}`, alert.parameters
+        );
+
+        addNotificationHistory({
+          alert_rule_id: alert.id,
+          webhook_id:    webhookId,
+          agent_id:      agentId,
+          status:        result.success ? 'success' : 'failed',
+          error_message: result.error,
+          payload:       JSON.stringify(alertData),
+        });
+      } catch (err) {
+        console.error(`[AlertEngine] testFire webhook ${webhookId} error:`, err);
+        addNotificationHistory({
+          alert_rule_id: alert.id,
+          webhook_id:    webhookId,
+          agent_id:      agentId,
+          status:        'failed',
+          error_message: err instanceof Error ? err.message : 'Unknown error',
+          payload:       JSON.stringify(alertData),
+        });
+      }
+    }
   }
 
-  /**
-   * Get cache statistics
-   */
-  getCacheStats(): { size: number; maxSize: number; oldestEntry: number | null } {
-    const entries = Array.from(this.executionState.values())
-      .map((entry) => entry.lastTriggeredAt)
-      .filter((timestamp): timestamp is number => typeof timestamp === 'number');
-
-    return {
-      size: this.executionState.size,
-      maxSize: MAX_STATE_ENTRIES,
-      oldestEntry: entries.length > 0 ? Math.min(...entries) : null,
-    };
-  }
-
-  /**
-   * Manually trigger cleanup
-   */
-  cleanup(): void {
-    this.cleanupExecutionState(Date.now());
-  }
+  // ─── Private: evaluation loop ─────────────────────────────────────────────
 
   private getAgentQueue(agentId: string): AlertQueueState {
-    const existing = this.agentQueues.get(agentId);
-    if (existing) {
-      return existing;
+    if (!this.agentQueues.has(agentId)) {
+      this.agentQueues.set(agentId, { inFlight: null });
     }
-
-    const queue = { inFlight: null };
-    this.agentQueues.set(agentId, queue);
-    return queue;
+    return this.agentQueues.get(agentId)!;
   }
 
   private async runEvaluation(
-    agentId: string,
+    agentId:   string,
     agentName: string,
-    metrics: DashboardMetrics
+    metrics:   DashboardMetrics
   ): Promise<void> {
     const now = Date.now();
-    this.cleanupExecutionState(now);
-
     try {
       const enabledAlerts = getEnabledAlertRules();
-
       for (const alert of enabledAlerts) {
-        if (alert.agent_id && alert.agent_id !== agentId) {
-          continue;
-        }
+        if (alert.agent_id && alert.agent_id !== agentId) continue;
 
-        const shouldTrigger = this.shouldTriggerAlert(alert, metrics, now);
-
-        if (!shouldTrigger) {
-          continue;
-        }
+        const shouldTrigger = await this.shouldTriggerAlert(alert, agentId, metrics, now);
+        if (!shouldTrigger) continue;
 
         await this.triggerAlert(alert, agentId, agentName, metrics, now);
-        this.updateExecutionState(alert, metrics, now, true);
       }
-    } catch (error) {
-      console.error('Error evaluating alerts:', error);
+    } catch (err) {
+      console.error('[AlertEngine] Error in runEvaluation:', err);
     }
   }
 
-  private shouldTriggerAlert(
+  // ─── Private: trigger decision ────────────────────────────────────────────
+
+  private  async shouldTriggerAlert(
     alert: AlertRule,
+    agentId: string,
     metrics: DashboardMetrics,
-    now: number
-  ): boolean {
+    now:     number
+  ): Promise<boolean> {
     switch (alert.trigger_type) {
-      case 'interval':
+      case 'interval':  
         return this.shouldTriggerIntervalAlert(alert, now);
 
-      case 'threshold':
-        return this.shouldTriggerThresholdAlert(alert, metrics, now);
-
-      case 'event':
+      case 'threshold': 
+        return this.shouldTriggerThresholdAlert(alert, agentId, metrics, now);
+      case 'event':     
         return true;
-
-      default:
+      default:          
         return false;
     }
   }
 
+  // reads from SQLite, not in-memory Map.
   private shouldTriggerIntervalAlert(alert: AlertRule, now: number): boolean {
     if (!alert.interval) {
       return false;
@@ -175,57 +212,72 @@ export class AlertEngine {
       return false;
     }
 
-    const lastExecution = this.executionState.get(alert.id)?.lastTriggeredAt;
+    const state         = getAlertExecutionState(alert.id);
+    const lastTriggered = state?.last_triggered_at
+      ? new Date(state.last_triggered_at).getTime()
+      : null;
 
-    if (!lastExecution) {
-      return true;
-    }
-
-    return now - lastExecution >= intervalMs;
+    if (!lastTriggered) return true;
+    return now - lastTriggered >= intervalMs;
   }
 
-  private shouldTriggerThresholdAlert(
-    alert: AlertRule,
+  //  aggregates snapshots before comparing to threshold.
+  private async shouldTriggerThresholdAlert(
+    alert:   AlertRule,
+    agentId: string,
     metrics: DashboardMetrics,
-    now: number
-  ): boolean {
-    const isBreached = this.isThresholdBreached(alert, metrics);
-    const previousState = this.executionState.get(alert.id)?.thresholdActive;
+    now:     number
+  ): Promise<boolean> {
+    const state            = getAlertExecutionState(alert.id);
+    const previouslyActive = state?.threshold_active === 1;
+
+    const isBreached = await this.isThresholdBreachedWithAggregation(
+      alert, agentId, metrics, now
+    );
 
     if (!isBreached) {
-      this.updateExecutionState(alert, metrics, now, false);
+      if (previouslyActive) {
+        setAlertExecutionState(alert.id, {
+          threshold_active:  0,
+          last_triggered_at: state?.last_triggered_at ?? null,
+        });
+      }
       return false;
     }
 
-    return !previousState;
+    // Fire only on the rising edge (inactive → active transition).
+    return !previouslyActive;
   }
 
-  private isThresholdBreached(alert: AlertRule, metrics: DashboardMetrics): boolean {
+  // FIX BUG 2: AVG across snapshot rows in the window.
+  private async isThresholdBreachedWithAggregation(
+    alert:   AlertRule,
+    agentId: string,
+    metrics: DashboardMetrics,
+    now:     number
+  ): Promise<boolean> {
+    const windowMs       = alert.interval
+      ? intervalMap[alert.interval]
+      : DEFAULT_THRESHOLD_WINDOW_MS;
+    const windowStart    = new Date(now - windowMs).toISOString();
+    const windowEnd      = new Date(now).toISOString();
+    const snapshotInterval = alert.interval ?? '5m';
+    const snapshots      = getSnapshotsByTimeRange(
+      agentId, snapshotInterval, windowStart, windowEnd
+    );
+
     for (const param of alert.parameters) {
-      if (!param.enabled || typeof param.threshold !== 'number') {
-        continue;
-      }
+      if (!param.enabled || typeof param.threshold !== 'number') continue;
+
+      const aggregatedValue = snapshots.length > 0
+        ? this.aggregateSnapshotMetric(snapshots, param.parameter)
+        : this.getInstantaneousMetric(param.parameter, metrics);
 
       switch (param.parameter) {
         case 'error_rate':
-          if ((metrics.statusCodes?.errorRate ?? 0) > param.threshold) {
-            return true;
-          }
-          break;
-
         case 'response_time':
-          if ((metrics.responseTime?.average ?? 0) > param.threshold) {
-            return true;
-          }
-          break;
-
         case 'request_count':
-          if ((metrics.requests?.total ?? 0) > param.threshold) {
-            return true;
-          }
-          break;
-
-        default:
+          if (aggregatedValue > param.threshold) return true;
           break;
       }
     }
@@ -233,24 +285,44 @@ export class AlertEngine {
     return false;
   }
 
-  private updateExecutionState(
-    alert: AlertRule,
-    metrics: DashboardMetrics,
-    now: number,
-    triggered: boolean
-  ): void {
-    const state = this.executionState.get(alert.id) ?? {};
-
-    if (alert.trigger_type === 'threshold') {
-      state.thresholdActive = triggered ? true : this.isThresholdBreached(alert, metrics);
+  private aggregateSnapshotMetric(
+    snapshots: MetricSnapshot[],
+    parameter: string
+  ): number {
+    const values: number[] = [];
+    for (const snap of snapshots) {
+      switch (parameter) {
+        case 'error_rate':
+          if (typeof snap.metrics.error_rate === 'number')
+            values.push(snap.metrics.error_rate);
+          break;
+        case 'response_time':
+          if (typeof snap.metrics.response_time?.average === 'number')
+            values.push(snap.metrics.response_time.average);
+          break;
+        case 'request_count':
+          if (typeof snap.metrics.request_count === 'number')
+            values.push(snap.metrics.request_count);
+          break;
+      }
     }
-
-    if (triggered) {
-      state.lastTriggeredAt = now;
-    }
-
-    this.executionState.set(alert.id, state);
+    if (values.length === 0) return 0;
+    return values.reduce((a, b) => a + b, 0) / values.length;
   }
+
+  private getInstantaneousMetric(
+    parameter: string,
+    metrics:   DashboardMetrics
+  ): number {
+    switch (parameter) {
+      case 'error_rate':    return metrics.statusCodes?.errorRate ?? 0;
+      case 'response_time': return metrics.responseTime?.average ?? 0;
+      case 'request_count': return metrics.requests?.total ?? 0;
+      default:              return 0;
+    }
+  }
+
+  // ─── Private: fire ────────────────────────────────────────────────────────
 
   private async triggerAlert(
     alert: AlertRule,
@@ -269,6 +341,8 @@ export class AlertEngine {
     } else {
       alertData = this.buildAlertData(agentId, agentName, metrics, now);
     }
+
+    let anySuccess = false;
 
     for (const webhookId of alert.webhook_ids) {
       try {
@@ -296,23 +370,38 @@ export class AlertEngine {
           payload: JSON.stringify(alertData),
         });
 
-        if (!result.success) {
-          console.error(`✗ Failed to send alert to ${webhook.name}: ${result.error}`);
+        if (result.success) {
+          anySuccess = true;
+        } else {
+          console.error(`[AlertEngine] ✗ Webhook ${webhook.name} failed: ${result.error}`);
         }
-      } catch (error) {
-        console.error(`Error sending to webhook ${webhookId}:`, error);
-
+      } catch (err) {
+        console.error(`[AlertEngine] Webhook ${webhookId} threw:`, err);
         addNotificationHistory({
           alert_rule_id: alert.id,
           webhook_id: webhookId,
           agent_id: agentId,
           status: 'failed',
-          error_message: error instanceof Error ? error.message : 'Unknown error',
+          error_message: err instanceof Error ? err.message : 'Unknown error',
           payload: JSON.stringify(alertData),
         });
       }
     }
+
+    // Delete snapshots immediately after successful send.
+    // Only deletes the specific agent+interval that just fired.
+    if (anySuccess) {
+      deleteSnapshotsAfterAlert(agentId, alert.interval ?? '5m');
+    }
+
+    // FIX BUG 1: Persist execution state so restarts don't reset the clock.
+    setAlertExecutionState(alert.id, {
+      last_triggered_at: new Date(now).toISOString(),
+      threshold_active:  alert.trigger_type === 'threshold' ? 1 : 0,
+    });
   }
+
+  // ─── Private: payload builders ────────────────────────────────────────────
 
   private buildAlertData(
     agentId: string,
@@ -413,29 +502,6 @@ export class AlertEngine {
       },
     };
   }
-
-  private cleanupExecutionState(now: number): void {
-    const entries = Array.from(this.executionState.entries());
-    const expired = entries.filter(([, state]) =>
-      state.lastTriggeredAt ? now - state.lastTriggeredAt > MAX_STATE_AGE_MS : false
-    );
-
-    for (const [alertId] of expired) {
-      this.executionState.delete(alertId);
-    }
-
-    if (this.executionState.size > MAX_STATE_ENTRIES) {
-      const sorted = entries
-        .filter(([, state]) => typeof state.lastTriggeredAt === 'number')
-        .sort((a, b) => (a[1].lastTriggeredAt ?? 0) - (b[1].lastTriggeredAt ?? 0));
-
-      const overflowCount = this.executionState.size - MAX_STATE_ENTRIES;
-      for (const [alertId] of sorted.slice(0, overflowCount)) {
-        this.executionState.delete(alertId);
-      }
-    }
-  }
 }
 
-// Singleton instance
 export const alertEngine = new AlertEngine();
