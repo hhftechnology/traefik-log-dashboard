@@ -199,7 +199,7 @@ export function useLogFetcher() {
         const requestPosition = isFirstEverConnect ? -1 : position;
         const requestLines = isFirstEverConnect
           ? maxHistoryLoadRef.current
-          : Math.min(maxLogsDisplayRef.current, 20000);
+          : maxLogsDisplayRef.current;
 
         if (isFirstEverConnect) {
           logStore.setCatchingUp(true);

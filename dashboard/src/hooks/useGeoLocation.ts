@@ -4,6 +4,7 @@ import { aggregateGeoLocations } from '@/utils/location';
 import { sortLogsByTime } from '@/utils/utils/log-utils';
 import { extractIP, isPrivateIP } from '@/utils/utils/ip-utils';
 import { apiClient } from '@/utils/api-client';
+import { useConfig } from '@/utils/contexts/ConfigContext';
 
 export type GeoDiagnosticReason =
   | 'no_logs'
@@ -128,6 +129,7 @@ export function useGeoLocation(logs: TraefikLog[], options: UseGeoLocationOption
   const [isLoadingGeo, setIsLoadingGeo] = useState(false);
   const [diagnostic, setDiagnostic] = useState<GeoDiagnostic | null>(null);
   const [debouncedLogs, setDebouncedLogs] = useState(logs);
+  const { config } = useConfig();
 
   // Debounce logs
   // eslint-disable-next-line no-restricted-syntax -- debounce requires dependency tracking
@@ -142,8 +144,8 @@ export function useGeoLocation(logs: TraefikLog[], options: UseGeoLocationOption
   // PERFORMANCE FIX: Memoize sorted logs to prevent re-sorting on every render
   // REDUNDANCY FIX: Use shared utility function
   const sortedLogs = useMemo(() => {
-    return sortLogsByTime(debouncedLogs, 1000);
-  }, [debouncedLogs]);
+    return sortLogsByTime(debouncedLogs, config.maxLogsDisplay);
+  }, [debouncedLogs, config.maxLogsDisplay]);
 
   // Fetch GeoIP data
   // eslint-disable-next-line no-restricted-syntax -- data fetch with dependency tracking

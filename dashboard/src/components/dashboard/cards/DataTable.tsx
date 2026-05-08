@@ -12,7 +12,7 @@ import {
   type VisibilityState,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Search, ChevronDown } from 'lucide-react';
+import { Search, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -134,12 +134,29 @@ export function DataTable<TData>({
                   {headerGroup.headers.map((header) => (
                     <div
                       key={header.id}
-                      className="px-2 h-10 flex items-center text-sm font-medium text-muted-foreground"
+                      className={`px-2 h-10 flex items-center text-sm font-medium text-muted-foreground select-none ${
+                        header.column.getCanSort() ? 'cursor-pointer hover:bg-muted/80 hover:text-foreground transition-colors' : ''
+                      }`}
                       style={{ width: header.getSize() }}
+                      onClick={header.column.getToggleSortingHandler()}
                     >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
+                      <div className="flex items-center gap-1.5 overflow-hidden">
+                        <span className="truncate">
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                        </span>
+                        {header.column.getCanSort() && (
+                          <span className="shrink-0">
+                            {{
+                              asc: <ArrowUp className="h-3.5 w-3.5 text-primary" />,
+                              desc: <ArrowDown className="h-3.5 w-3.5 text-primary" />,
+                            }[header.column.getIsSorted() as string] ?? (
+                              <ArrowUpDown className="h-3 w-3 opacity-30" />
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -185,10 +202,28 @@ export function DataTable<TData>({
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
+                    <TableHead
+                      key={header.id}
+                      className={header.column.getCanSort() ? 'cursor-pointer hover:bg-muted/80 hover:text-foreground select-none transition-colors' : ''}
+                      onClick={header.column.getToggleSortingHandler()}
+                    >
+                      <div className="flex items-center gap-1.5 overflow-hidden">
+                        <span className="truncate">
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(header.column.columnDef.header, header.getContext())}
+                        </span>
+                        {header.column.getCanSort() && (
+                          <span className="shrink-0">
+                            {{
+                              asc: <ArrowUp className="h-3.5 w-3.5 text-primary" />,
+                              desc: <ArrowDown className="h-3.5 w-3.5 text-primary" />,
+                            }[header.column.getIsSorted() as string] ?? (
+                              <ArrowUpDown className="h-3 w-3 opacity-30" />
+                            )}
+                          </span>
+                        )}
+                      </div>
                     </TableHead>
                   ))}
                 </TableRow>

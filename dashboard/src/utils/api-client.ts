@@ -6,6 +6,7 @@ import {
   TraefikLog,
 } from './types';
 import { getBaseOrigin, withBasePath } from './utils/base-url';
+import { getRuntimeConfig } from './config/runtime-config';
 
 interface AgentRequestInput {
   agentId: string;
@@ -141,9 +142,10 @@ export class APIClient {
   }
 
   async getAccessLogs(input: AccessLogsRequestInput): Promise<LogsResponse> {
+    const config = getRuntimeConfig();
     const params = new URLSearchParams({
       position: String(input.position ?? 0),
-      lines: String(input.lines ?? 1000),
+      lines: String(input.lines ?? config.maxLogsDisplay ?? 1000),
     });
 
     return this.fetchJSON<LogsResponse>({

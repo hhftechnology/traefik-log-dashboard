@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, useMemo } from 'react';
+import React, { lazy, Suspense, useMemo, useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TraefikLog } from '@/utils/types';
@@ -88,7 +88,7 @@ export default function TabbedDashboard({
 
   // Memoize sorted logs
   const sortedLogs = useMemo(() => {
-    return sortLogsByTime(logs, 1000);
+    return sortLogsByTime(logs, config.maxLogsDisplay);
   }, [logs]);
 
   // Calculate metrics
@@ -107,6 +107,18 @@ export default function TabbedDashboard({
     { id: 'system', label: 'System', icon: Cpu },
     { id: 'logs', label: 'Logs', icon: FileText },
   ];
+
+  const [showGeoLoading, setShowGeoLoading] = useState(false);
+ 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (isLoadingGeo) {
+      timer = setTimeout(() => setShowGeoLoading(true), 500);
+    } else {
+      setShowGeoLoading(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isLoadingGeo]);
 
   return (
     <div className="space-y-4">
@@ -174,8 +186,8 @@ export default function TabbedDashboard({
         </TabsContent>
       </Tabs>
 
-      {isLoadingGeo && (
-        <div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-3 rounded-lg shadow-lg text-sm flex items-center gap-3 z-50">
+      {showGeoLoading && (
+        <div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-3 rounded-lg shadow-lg text-sm flex items-center gap-3 z-50 animate-in fade-in duration-300">
           <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin"></div>
           <span className="font-medium">Loading location data...</span>
         </div>
