@@ -36,6 +36,7 @@ function buildRuntimeConfig(): Record<string, unknown> {
   const showDemoRaw = pick('SHOW_DEMO_PAGE', 'DASHBOARD_SHOW_DEMO_PAGE');
   const refreshRaw = pick('DASHBOARD_REFRESH_INTERVAL_MS', 'REFRESH_INTERVAL_MS');
   const maxLogsRaw = pick('DASHBOARD_MAX_LOGS_DISPLAY', 'MAX_LOGS_DISPLAY');
+  const maxHistoryLoadRaw = pick('DASHBOARD_MAX_HISTORY_LOAD', 'MAX_HISTORY_LOAD');
   const trafficTopItemsRaw = pick('DASHBOARD_TRAFFIC_TOP_ITEMS_LIMIT');
   const parserTrendWindowRaw = pick('DASHBOARD_PARSER_TREND_WINDOW_MINUTES');
   const agentsEnvOnlyRaw = pick('DASHBOARD_AGENTS_ENV_ONLY');
@@ -63,15 +64,24 @@ function buildRuntimeConfig(): Record<string, unknown> {
     'log-dashboard',
   ];
 
+  const DEFAULTS = {
+    REFRESH_INTERVAL_MS: 5000,
+    MAX_LOGS_DISPLAY: 1000,
+    MAX_HISTORY_LOAD: 5000,
+    TRAFFIC_TOP_ITEMS_LIMIT: 10,
+    PARSER_TREND_WINDOW_MINUTES: 30,
+  };
+
   return {
     basePath,
     baseDomain,
     showDemoPage: toBool(showDemoRaw, true),
     skipIntroPage: toBool(skipIntroPageRaw, false),
-    refreshIntervalMs: toInt(refreshRaw, 5000),
-    maxLogsDisplay: toInt(maxLogsRaw, 1000),
-    trafficTopItemsLimit: Math.max(3, Math.min(200, toInt(trafficTopItemsRaw, 10))),
-    parserTrendWindowMinutes: Math.max(15, Math.min(30, toInt(parserTrendWindowRaw, 30))),
+    refreshIntervalMs: toInt(refreshRaw, DEFAULTS.REFRESH_INTERVAL_MS),
+    maxLogsDisplay: toInt(maxLogsRaw, DEFAULTS.MAX_LOGS_DISPLAY),
+    maxHistoryLoad: toInt(maxHistoryLoadRaw, DEFAULTS.MAX_HISTORY_LOAD),
+    trafficTopItemsLimit: Math.max(3, Math.min(200, toInt(trafficTopItemsRaw, DEFAULTS.TRAFFIC_TOP_ITEMS_LIMIT))),
+    parserTrendWindowMinutes: Math.max(15, Math.min(30, toInt(parserTrendWindowRaw, DEFAULTS.PARSER_TREND_WINDOW_MINUTES))),
     agentsEnvOnly: toBool(agentsEnvOnlyRaw, false),
     hideInternalTrafficDefault: toBool(hideInternalTrafficDefaultRaw, true),
     internalNoisePathPrefixes: toList(internalNoisePathPrefixesRaw, defaultInternalNoisePathPrefixes),
