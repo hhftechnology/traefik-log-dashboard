@@ -1,6 +1,7 @@
-# .github/workflows/forum-sync.yml — copies GitHub issues and comments to this repo's category on forum.hhf.technology.
-# Needs two repository secrets: FORUM_SYNC_TOKEN and FORUM_SYNC_URL (Settings → Secrets and variables → Actions).
-# Issue events always run the copy of this file on the DEFAULT branch, so it only takes effect once merged there.
+# .github/workflows/forum-sync.yml — keeps this repo's GitHub issues AND discussions in sync with its category on forum.hhf.technology.
+# Needs two repository secrets: FORUM_SYNC_TOKEN and FORUM_SYNC_URL (Settings → Secrets and variables → Actions). Already set on all 17 repos.
+# Issue/discussion events always run the copy of this file on the DEFAULT branch, so it only takes effect once merged there.
+# Never runs on push or pull_request, so it can't start builds or image jobs.
 name: Forum sync
 
 on:
@@ -8,14 +9,31 @@ on:
     types: [opened, closed, reopened]
   issue_comment:
     types: [created]
+  discussion:
+    # GitHub Actions doesn't deliver discussion closed/reopened events (not valid activity types), so those aren't synced live.
+    types: [created, locked, unlocked, answered, unanswered]
+  discussion_comment:
+    types: [created]
 
 jobs:
   forum-sync:
-    if: ${{ !github.event.issue.pull_request }}
+    # Issues. Skips PR comments and comments written by the forum sync itself (they carry the hhf-forum-sync marker).
+    if: ${{ (github.event_name == 'issues' || github.event_name == 'issue_comment') && !github.event.issue.pull_request && !contains(github.event.comment.body, 'hhf-forum-sync') }}
     permissions:
       contents: read
       issues: write
     uses: hhftechnology/.github/.github/workflows/forum-sync.yml@main
+    secrets:
+      FORUM_SYNC_TOKEN: ${{ secrets.FORUM_SYNC_TOKEN }}
+      FORUM_SYNC_URL: ${{ secrets.FORUM_SYNC_URL }}
+
+  forum-sync-discussions:
+    # Discussions (only fires in repos that have Discussions turned on).
+    if: ${{ (github.event_name == 'discussion' || github.event_name == 'discussion_comment') && !contains(github.event.comment.body, 'hhf-forum-sync') }}
+    permissions:
+      contents: read
+      discussions: write
+    uses: hhftechnology/.github/.github/workflows/forum-sync-discussions.yml@main
     secrets:
       FORUM_SYNC_TOKEN: ${{ secrets.FORUM_SYNC_TOKEN }}
       FORUM_SYNC_URL: ${{ secrets.FORUM_SYNC_URL }}
