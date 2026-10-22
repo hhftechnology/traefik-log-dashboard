@@ -120,6 +120,8 @@ Update both `TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN` and `AGENT_API_TOKEN` with this v
 
 ```bash
 # Create network if it doesn't exist
+
+[![Discuss on the HHF forum](https://img.shields.io/badge/discuss-forum.hhf.technology-AD1457?logo=discourse&logoColor=white)](https://forum.hhf.technology/c/traefik-plugins-tools/traefik-log-dashboard)
 docker network create traefik-network 2>/dev/null || true
 
 # Start services

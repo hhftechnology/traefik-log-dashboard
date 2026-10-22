@@ -1,0 +1,21 @@
+# .github/workflows/forum-sync.yml — copies GitHub issues and comments to this repo's category on forum.hhf.technology.
+# Needs two repository secrets: FORUM_SYNC_TOKEN and FORUM_SYNC_URL (Settings → Secrets and variables → Actions).
+# Issue events always run the copy of this file on the DEFAULT branch, so it only takes effect once merged there.
+name: Forum sync
+
+on:
+  issues:
+    types: [opened, closed, reopened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  forum-sync:
+    if: ${{ !github.event.issue.pull_request }}
+    permissions:
+      contents: read
+      issues: write
+    uses: hhftechnology/.github/.github/workflows/forum-sync.yml@main
+    secrets:
+      FORUM_SYNC_TOKEN: ${{ secrets.FORUM_SYNC_TOKEN }}
+      FORUM_SYNC_URL: ${{ secrets.FORUM_SYNC_URL }}
