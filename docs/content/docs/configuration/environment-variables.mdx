@@ -65,6 +65,16 @@ Legacy fallback (kept for compatibility): `AGENT_API_URL`, `AGENT_API_TOKEN`, `A
 | `SHOW_DEMO_PAGE` | Show demo dashboard link | `true` | No |
 | `DASHBOARD_DENSITY` | UI density (`compact`, `comfortable`) | `comfortable` | No |
 
+### Map Configuration
+
+The Geographic Distribution map uses keyless [OpenFreeMap](https://openfreemap.org) vector tiles by default. A URL containing `{z}` is loaded as a raster tile template (`https://.../{z}/{x}/{y}.png`); any other URL is loaded as a MapLibre style JSON. Vector styles need WebGL2 in the browser. For a provider that needs an API key, include the key in the URL as that provider documents.
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `DASHBOARD_MAP_TILE_URL` | Basemap for light mode: raster tile template or MapLibre style URL (alias: `MAP_TILE_URL`) | `https://tiles.openfreemap.org/styles/positron` | No |
+| `DASHBOARD_MAP_TILE_URL_DARK` | Basemap for dark mode (alias: `MAP_TILE_URL_DARK`) | `DASHBOARD_MAP_TILE_URL`, else `https://tiles.openfreemap.org/styles/dark` | No |
+| `DASHBOARD_MAP_TILE_ATTRIBUTION` | Attribution HTML shown on the map; set it when you change the tile URL (alias: `MAP_TILE_ATTRIBUTION`) | OpenFreeMap / OpenMapTiles / OpenStreetMap credits | No |
+
 ### GeoIP Configuration
 
 Geographic lookup is handled by the dashboard `/api/location/*` service.

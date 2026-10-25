@@ -15,6 +15,9 @@ export interface RuntimeConfig {
   themeTokens?: Record<string, string>;
   defaultAgentUrl?: string;
   defaultAgentConfigured?: boolean;
+  mapTileUrl?: string;
+  mapTileUrlDark?: string;
+  mapTileAttribution?: string;
 }
 
 const buildTimeFallback: RuntimeConfig = {

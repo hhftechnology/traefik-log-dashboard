@@ -193,7 +193,7 @@ export default function InteractiveGeoMap({ locations }: Props) {
         <div className="space-y-4">
           {/* Map Visualization */}
           <div className="w-full h-[400px] border rounded-lg overflow-hidden relative">
-            <Map center={mapCenter} zoom={2} className="h-full w-full">
+            <Map center={mapCenter} zoom={2} className="h-full w-full" attributionControl>
               <MapTileLayer />
               <MapZoomControl />
               <MapMarkerClusterGroup

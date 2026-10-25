@@ -49,6 +49,9 @@ function buildRuntimeConfig(): Record<string, unknown> {
   const hideInternalTrafficDefaultRaw = pick('DASHBOARD_HIDE_INTERNAL_TRAFFIC_DEFAULT');
   const internalNoisePathPrefixesRaw = pick('DASHBOARD_INTERNAL_NOISE_PATH_PREFIXES');
   const internalNoiseServicePatternsRaw = pick('DASHBOARD_INTERNAL_NOISE_SERVICE_PATTERNS');
+  const mapTileUrl = pick('DASHBOARD_MAP_TILE_URL', 'MAP_TILE_URL');
+  const mapTileUrlDark = pick('DASHBOARD_MAP_TILE_URL_DARK', 'MAP_TILE_URL_DARK');
+  const mapTileAttribution = pick('DASHBOARD_MAP_TILE_ATTRIBUTION', 'MAP_TILE_ATTRIBUTION');
 
   const defaultInternalNoisePathPrefixes = [
     '/api/system/resources',
@@ -84,6 +87,9 @@ function buildRuntimeConfig(): Record<string, unknown> {
     themeTokens: {},
     defaultAgentUrl: frontendAgentUrl,
     defaultAgentConfigured: !!agentToken,
+    mapTileUrl,
+    mapTileUrlDark,
+    mapTileAttribution,
   };
 }
 

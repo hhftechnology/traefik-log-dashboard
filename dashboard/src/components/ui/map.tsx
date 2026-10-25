@@ -13,10 +13,18 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { MapLibreTileLayer } from "@/components/ui/maplibre-tile-layer"
 import {
     PlaceAutocomplete,
     type PlaceAutocompleteProps,
 } from "@/components/ui/place-autocomplete"
+import { getRuntimeConfig } from "@/utils/config/runtime-config"
+import {
+    isRasterTileUrl,
+    resolveMapTileAttribution,
+    resolveMapTileUrl,
+    supportsWebGL2,
+} from "@/utils/utils/map-tiles"
 import type { CheckboxItem } from "@radix-ui/react-dropdown-menu"
 import type {
     Circle as LCircle,
@@ -171,6 +179,33 @@ function useMapLayersContext() {
     return useContext(MapLayersContext)
 }
 
+function useResolvedBasemap({
+    url,
+    attribution,
+    darkUrl,
+    darkAttribution,
+}: {
+    url?: string
+    attribution?: string
+    darkUrl?: string
+    darkAttribution?: string
+}) {
+    const runtimeConfig = getRuntimeConfig()
+    const { resolvedTheme } = useTheme()
+    const isDark = resolvedTheme === "dark"
+
+    return {
+        resolvedTheme,
+        resolvedUrl: isDark
+            ? (darkUrl ?? url ?? resolveMapTileUrl(true, runtimeConfig))
+            : (url ?? resolveMapTileUrl(false, runtimeConfig)),
+        resolvedAttribution:
+            isDark && darkAttribution
+                ? darkAttribution
+                : (attribution ?? resolveMapTileAttribution(runtimeConfig)),
+    }
+}
+
 function MapTileLayer({
     name = "Default",
     url,
@@ -190,21 +225,8 @@ function MapTileLayer({
     }
 
     const context = useContext(MapLayersContext)
-    const DEFAULT_URL =
-        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
-    const DEFAULT_DARK_URL =
-        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
-
-    const { resolvedTheme } = useTheme()
-    const resolvedUrl =
-        resolvedTheme === "dark"
-            ? (darkUrl ?? url ?? DEFAULT_DARK_URL)
-            : (url ?? DEFAULT_URL)
-    const resolvedAttribution =
-        resolvedTheme === "dark" && darkAttribution
-            ? darkAttribution
-            : (attribution ??
-              '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>')
+    const { resolvedTheme, resolvedUrl, resolvedAttribution } =
+        useResolvedBasemap({ url, attribution, darkUrl, darkAttribution })
 
     // eslint-disable-next-line no-restricted-syntax -- map layer registration with deps
     useEffect(() => {
@@ -219,6 +241,22 @@ function MapTileLayer({
 
     if (context && context.selectedTileLayer !== name) {
         return null
+    }
+
+    if (!isRasterTileUrl(resolvedUrl)) {
+        if (!supportsWebGL2()) {
+            console.warn(
+                "WebGL2 is unavailable, so the vector basemap is hidden. Set DASHBOARD_MAP_TILE_URL to a raster tile URL to show a basemap."
+            )
+            return null
+        }
+        return (
+            <MapLibreTileLayer
+                key={`tile-${resolvedTheme}`}
+                url={resolvedUrl}
+                attribution={resolvedAttribution}
+            />
+        )
     }
 
     return (
