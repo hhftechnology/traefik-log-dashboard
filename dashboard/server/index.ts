@@ -10,6 +10,7 @@ import proxyRoutes from './routes/proxy';
 import mobileRoutes, { requireMobileApiKey } from './routes/mobile';
 import { initAlertingSchema } from './alerts/repository';
 import { startAlertScheduler } from './alerts/scheduler';
+import { health } from './health';
 
 const app = express();
 const PORT = parseInt(process.env.DASHBOARD_PORT || process.env.PORT || '3000', 10);
@@ -32,6 +33,8 @@ const runtimeConfigJSON = JSON.stringify(runtimeConfig);
 // --- Middleware ---
 
 app.use(express.json());
+
+app.get('/health', health);
 
 // --- API Routes (before static files) ---
 

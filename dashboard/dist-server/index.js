@@ -48,8 +48,9 @@ const proxy_1 = __importDefault(require("./routes/proxy"));
 const mobile_1 = __importStar(require("./routes/mobile"));
 const repository_1 = require("./alerts/repository");
 const scheduler_1 = require("./alerts/scheduler");
+const health_1 = require("./health");
 const app = (0, express_1.default)();
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = parseInt(process.env.DASHBOARD_PORT || process.env.PORT || '3000', 10);
 const DIST_DIR = path_1.default.resolve(__dirname, '../dist');
 const DATA_DIR = process.env.DATA_DIR || '/data';
 // Ensure data directory exists for SQLite
@@ -64,6 +65,7 @@ console.log('[server] Database initialized, env agents synced');
 const runtimeConfigJSON = JSON.stringify(config_1.runtimeConfig);
 // --- Middleware ---
 app.use(express_1.default.json());
+app.get('/health', health_1.health);
 // --- API Routes (before static files) ---
 // Dashboard agent management API
 app.use('/api/dashboard/agents', agents_1.default);

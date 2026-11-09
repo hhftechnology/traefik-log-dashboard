@@ -167,6 +167,7 @@ Open http://localhost:3000 in your browser.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DASHBOARD_PORT` | Dashboard listen port. `PORT` is still accepted | `3000` |
+| `/health` | Dashboard process health check. It does not call an agent | no auth |
 | `DASHBOARD_API_TOKEN` | Bearer token required by `/api/dashboard/agents` | Required |
 | `DASHBOARD_PROXY_ALLOWLIST` | Comma-separated hosts the dashboard may proxy to (`host`, `host:port`, or origin) | Required |
 | `ALERTS_API_KEY` | Required to read `/api/dashboard/alerts` | Required for alert reads |
