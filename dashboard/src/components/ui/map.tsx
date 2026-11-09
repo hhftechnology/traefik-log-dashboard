@@ -190,10 +190,8 @@ function MapTileLayer({
     }
 
     const context = useContext(MapLayersContext)
-    const DEFAULT_URL =
-        "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
-    const DEFAULT_DARK_URL =
-        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+    const DEFAULT_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    const DEFAULT_DARK_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 
     const { resolvedTheme } = useTheme()
     const resolvedUrl =
@@ -204,7 +202,7 @@ function MapTileLayer({
         resolvedTheme === "dark" && darkAttribution
             ? darkAttribution
             : (attribution ??
-              '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>')
+              '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>')
 
     // eslint-disable-next-line no-restricted-syntax -- map layer registration with deps
     useEffect(() => {
