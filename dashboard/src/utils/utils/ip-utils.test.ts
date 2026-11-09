@@ -16,5 +16,7 @@ describe('extractIP', () => {
     expect(extractIP('1.1.1.1:443')).toBe('1.1.1.1');
     expect(extractIP('[2001:4860:4860::8888]:443')).toBe('2001:4860:4860::8888');
     expect(extractIP('2001:4860:4860::8888')).toBe('2001:4860:4860::8888');
+    expect(extractIP('2a02:1210:8c53:9c00:bd88:4066:d542:83bd')).toBe('2a02:1210:8c53:9c00:bd88:4066:d542:83bd');
+    expect(extractIP('[2a02:1210:8c53:9c00:bd88:4066:d542:83bd]:2270')).toBe('2a02:1210:8c53:9c00:bd88:4066:d542:83bd');
   });
 });

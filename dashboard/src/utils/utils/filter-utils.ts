@@ -2,7 +2,7 @@
 
 import { TraefikLog } from '../types';
 import { FilterSettings, FilterCondition } from '../types/filter';
-import { isPrivateIP, matchesAnyIPRange } from './ip-utils';
+import { extractIP, isPrivateIP, matchesAnyIPRange } from './ip-utils';
 
 export interface InternalNoiseRules {
   pathPrefixes: string[];
@@ -32,12 +32,7 @@ export function isInternalNoiseLog(log: TraefikLog, rules: InternalNoiseRules): 
  * Extract real IP from headers based on proxy settings
  */
 function getRealIP(log: TraefikLog, settings: FilterSettings): string {
-  let ip = log.ClientHost || log.ClientAddr || '';
-
-  // Strip port if present
-  if (ip.includes(':')) {
-    ip = ip.split(':')[0];
-  }
+  let ip = extractIP(log.ClientHost || log.ClientAddr || '');
 
   // Check proxy headers in order of precedence
   if (settings.proxySettings.enableCFHeaders) {

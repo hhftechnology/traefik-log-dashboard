@@ -94,19 +94,26 @@ export function matchesAnyIPRange(ip: string, ranges: string[]): boolean {
  */
 export function extractIP(clientAddr: string): string {
   if (!clientAddr) return '';
-  
-  // Handle IPv6 addresses
-  if (clientAddr.includes('[')) {
-    const match = clientAddr.match(/\[([^\]]+)\]/);
-    return match ? match[1] : clientAddr;
+  const value = clientAddr.trim();
+
+  if (value.startsWith('[')) {
+    const end = value.indexOf(']');
+    if (end > 1) {
+      return value.slice(1, end);
+    }
   }
-  
-  // Remove port for IPv4
-  const lastColonIndex = clientAddr.lastIndexOf(':');
-  if (lastColonIndex > 0 && !clientAddr.includes('::')) {
-    return clientAddr.substring(0, lastColonIndex);
+
+  // IPv4 with a numeric port. Fully written IPv6 has multiple colons and must
+  // keep every hextet; only the bracket form above carries a port.
+  const lastColon = value.lastIndexOf(':');
+  if (lastColon > 0 && value.includes('.')) {
+    const host = value.slice(0, lastColon);
+    const port = value.slice(lastColon + 1);
+    if (/^\d+$/.test(port) && host.split('.').length === 4) {
+      return host;
+    }
   }
-  
-  return clientAddr;
+
+  return value;
 }
 
