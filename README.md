@@ -168,6 +168,7 @@ Open http://localhost:3000 in your browser.
 |----------|-------------|---------|
 | `DASHBOARD_API_TOKEN` | Bearer token required by `/api/dashboard/agents` | Required |
 | `DASHBOARD_PROXY_ALLOWLIST` | Comma-separated hosts the dashboard may proxy to (`host`, `host:port`, or origin) | Required |
+| `ALERTS_API_KEY` | Required to read `/api/dashboard/alerts` | Required for alert reads |
 | `AGENT_1_URL` | First environment agent URL | Required (or `DASHBOARD_AGENTS_JSON`) |
 | `AGENT_1_TOKEN` | First environment agent token | Optional |
 | `AGENT_1_NAME` | First environment agent name | `Agent 1` |

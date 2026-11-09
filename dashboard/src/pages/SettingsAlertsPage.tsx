@@ -18,7 +18,7 @@ import { Link } from '@tanstack/react-router';
 import { Webhook, AlertRule } from '@/utils/types/alerting';
 import WebhookFormModal from '@/components/WebhookFormModal';
 import AlertRuleFormModal from '@/components/AlertRuleFormModal';
-import { alertApiClient } from '@/utils/alert-api-client';
+import { alertApiClient, getAlertsApiKey, setAlertsApiKey } from '@/utils/alert-api-client';
 import { useAgents } from '@/utils/contexts/AgentContext';
 
 type TabType = 'webhooks' | 'alerts';
@@ -38,6 +38,7 @@ export default function AlertsSettingsPage() {
   const [editingAlert, setEditingAlert] = useState<AlertRule | null>(null);
 
   const [stats, setStats] = useState({ total: 0, last24h: 0, success: 0, failed: 0 });
+  const [alertsApiKey, setAlertsApiKeyValue] = useState(getAlertsApiKey);
 
   const loadData = useCallback(async () => {
     const [webhooksResponse, rulesResponse, statsResponse] = await Promise.all([
@@ -208,6 +209,35 @@ export default function AlertsSettingsPage() {
             </p>
           </div>
         </div>
+
+        <form
+          className="mb-8 max-w-xl"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setAlertsApiKey(alertsApiKey);
+            loadData().catch((error) => {
+              toast.error(error instanceof Error ? error.message : 'Failed to load alerting settings');
+            });
+          }}
+        >
+          <label className="block text-sm font-medium" htmlFor="alerts-api-key">
+            Alerts API key
+          </label>
+          <p className="mt-1 text-sm text-muted-foreground">
+            GET /api/dashboard/alerts requires the server <code>ALERTS_API_KEY</code>. This browser session stores it only in sessionStorage.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <input
+              id="alerts-api-key"
+              type="password"
+              autoComplete="current-password"
+              value={alertsApiKey}
+              onChange={(event) => setAlertsApiKeyValue(event.target.value)}
+              className="w-full rounded-lg border border-input bg-card px-3 py-2 font-mono text-sm"
+            />
+            <Button type="submit">Save</Button>
+          </div>
+        </form>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">

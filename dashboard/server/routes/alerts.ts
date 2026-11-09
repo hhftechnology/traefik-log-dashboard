@@ -1,4 +1,5 @@
-import { NextFunction, Request, Response, Router } from 'express';
+import { Request, Response, Router } from 'express';
+import { requireAlertsMutationAuth } from '../alerts-auth';
 import { getAgentById, getAllAgents } from '../db';
 import {
   createAlertRule,
@@ -19,7 +20,6 @@ import { AlertParameterConfig, AlertRule, AlertWebhook } from '../alerts/types';
 import { runAlertSchedulerCycle } from '../alerts/scheduler';
 
 const router = Router();
-const ALERTS_API_KEY = process.env.ALERTS_API_KEY?.trim() || '';
 const SCHEDULE_TIME_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const ALLOWED_INTERVALS = new Set(['5m', '15m', '30m', '1h', '6h', '12h', '24h']);
 const ALLOWED_PARAMETERS = new Set<AlertParameterConfig['parameter']>([
@@ -61,25 +61,6 @@ function isConditionOperator(value: unknown): value is AlertRule['condition_oper
 
 function isScheduleTimeUTC(value: unknown): value is string {
   return typeof value === 'string' && SCHEDULE_TIME_REGEX.test(value);
-}
-
-function requireAlertsMutationAuth(req: Request, res: Response, next: NextFunction): void {
-  if (!ALERTS_API_KEY || req.method === 'GET') {
-    next();
-    return;
-  }
-
-  const headerValue = req.header('x-alerts-api-key')
-    || req.header('x-api-key')
-    || req.header('authorization')?.replace(/^Bearer\s+/i, '')
-    || '';
-
-  if (headerValue !== ALERTS_API_KEY) {
-    res.status(401).json({ error: 'alerts API key is required for this operation' });
-    return;
-  }
-
-  next();
 }
 
 function validateWebhookPayload(payload: unknown): ValidationResult<Omit<AlertWebhook, 'id' | 'created_at' | 'updated_at'>> {

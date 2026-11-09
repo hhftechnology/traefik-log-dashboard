@@ -1,6 +1,32 @@
 import { AlertRule, NotificationHistory, Webhook } from './types/alerting';
 import { withBasePath } from './utils/base-url';
 
+const ALERTS_KEY_STORAGE = 'tld-alerts-api-key';
+
+export function getAlertsApiKey(): string {
+  if (typeof sessionStorage === 'undefined') {
+    return '';
+  }
+  return sessionStorage.getItem(ALERTS_KEY_STORAGE)?.trim() ?? '';
+}
+
+export function setAlertsApiKey(value: string): void {
+  if (typeof sessionStorage === 'undefined') {
+    return;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    sessionStorage.removeItem(ALERTS_KEY_STORAGE);
+    return;
+  }
+  sessionStorage.setItem(ALERTS_KEY_STORAGE, trimmed);
+}
+
+function alertsAuthHeaders(): Record<string, string> {
+  const key = getAlertsApiKey();
+  return key ? { 'X-Alerts-Api-Key': key } : {};
+}
+
 interface AlertStats {
   total: number;
   last24h: number;
@@ -15,6 +41,7 @@ interface RequestOptions extends RequestInit {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...alertsAuthHeaders(),
     ...(options.headers as Record<string, string> ?? {}),
   };
 
