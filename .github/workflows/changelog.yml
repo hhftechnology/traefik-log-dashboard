@@ -1,0 +1,34 @@
+name: Changelog
+
+on:
+  pull_request:
+    branches:
+      - dev-fix
+
+jobs:
+  unreleased:
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-changelog') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Require an Unreleased changelog entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f CHANGELOG.md ]; then
+            echo "CHANGELOG.md is missing"
+            exit 1
+          fi
+          awk '
+            BEGIN { in_unreleased = 0; entries = 0 }
+            /^## \[Unreleased\][[:space:]]*$/ { in_unreleased = 1; next }
+            /^## / { if (in_unreleased) exit }
+            in_unreleased && /^[[:space:]]*[-*][[:space:]]+/ { entries++ }
+            END { exit entries > 0 ? 0 : 1 }
+          ' CHANGELOG.md || {
+            echo "CHANGELOG.md needs a ## [Unreleased] section with at least one bullet."
+            echo "Add the entry, or label the pull request skip-changelog."
+            exit 1
+          }

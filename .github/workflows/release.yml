@@ -1,0 +1,37 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Read Unreleased notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          awk '
+            BEGIN { in_unreleased = 0 }
+            /^## \[Unreleased\][[:space:]]*$/ { in_unreleased = 1; next }
+            /^## / { if (in_unreleased) exit }
+            in_unreleased { print }
+          ' CHANGELOG.md > /tmp/release-notes.md
+          if ! grep -Eq '[^[:space:]]' /tmp/release-notes.md; then
+            echo "No Unreleased notes were found in CHANGELOG.md" > /tmp/release-notes.md
+          fi
+
+      - name: Draft the GitHub release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        with:
+          draft: true
+          body_path: /tmp/release-notes.md
+          name: ${{ github.ref_name }}
