@@ -160,12 +160,13 @@ Open http://localhost:3000 in your browser.
 | `TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN` | Authentication token. The agent rejects protected requests when this is empty | Required |
 | `TRAEFIK_LOG_DASHBOARD_SYSTEM_MONITORING` | Enable system monitoring | `true` |
 | `TRAEFIK_LOG_DASHBOARD_LOG_FORMAT` | Log format (`json` or `common`) | `json` |
-| `PORT` | Agent listen port | `5000` |
+| `TRAEFIK_LOG_DASHBOARD_PORT` | Agent listen port. `PORT` is still accepted | `5000` |
 
 ### Dashboard
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `DASHBOARD_PORT` | Dashboard listen port. `PORT` is still accepted | `3000` |
 | `DASHBOARD_API_TOKEN` | Bearer token required by `/api/dashboard/agents` | Required |
 | `DASHBOARD_PROXY_ALLOWLIST` | Comma-separated hosts the dashboard may proxy to (`host`, `host:port`, or origin) | Required |
 | `ALERTS_API_KEY` | Required to read `/api/dashboard/alerts` | Required for alert reads |

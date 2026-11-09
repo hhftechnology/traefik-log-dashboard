@@ -12,7 +12,7 @@ import { initAlertingSchema } from './alerts/repository';
 import { startAlertScheduler } from './alerts/scheduler';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = parseInt(process.env.DASHBOARD_PORT || process.env.PORT || '3000', 10);
 const DIST_DIR = path.resolve(__dirname, '../dist');
 const DATA_DIR = process.env.DATA_DIR || '/data';
 

@@ -57,7 +57,7 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Port:                   getEnv("PORT", "5000"),
+		Port:                   getEnv("TRAEFIK_LOG_DASHBOARD_PORT", getEnv("PORT", "5000")),
 		AccessPath:             getEnv("TRAEFIK_LOG_DASHBOARD_ACCESS_PATH", "/var/log/traefik/access.log"),
 		ErrorPath:              getEnv("TRAEFIK_LOG_DASHBOARD_ERROR_PATH", "/var/log/traefik/traefik.log"),
 		AuthToken:              getEnv("TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN", ""),
