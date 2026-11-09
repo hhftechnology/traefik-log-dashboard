@@ -86,7 +86,8 @@
   },
   "overrides": {
     "glob": "^10.4.5",
-    "seroval": "1.6.12"
+    "seroval": "1.6.12",
+    "qs": "6.16.2"
   },
   "engines": {
     "node": ">=20.0.0",
