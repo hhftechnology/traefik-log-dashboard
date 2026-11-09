@@ -40,7 +40,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "express": "^4.21.0",
-    "http-proxy-middleware": "^3.0.3",
+    "http-proxy-middleware": "3.0.7",
     "idb-keyval": "^6.2.2",
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",

@@ -7,7 +7,7 @@
     "better-sqlite3": "11.10.0",
     "body-parser": "1.20.9",
     "express": "4.22.1",
-    "http-proxy-middleware": "3.0.5",
+    "http-proxy-middleware": "3.0.7",
     "maxmind": "5.0.5"
   }
 }
