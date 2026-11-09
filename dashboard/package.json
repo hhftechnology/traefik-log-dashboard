@@ -31,6 +31,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-router": "^1.99.0",
+    "seroval": "1.6.12",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.13.16",
     "better-sqlite3": "^11.6.0",
@@ -84,7 +85,8 @@
     "vitest": "^2.1.4"
   },
   "overrides": {
-    "glob": "^10.4.5"
+    "glob": "^10.4.5",
+    "seroval": "1.6.12"
   },
   "engines": {
     "node": ">=20.0.0",
