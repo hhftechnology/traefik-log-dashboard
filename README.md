@@ -157,7 +157,7 @@ Open http://localhost:3000 in your browser.
 |----------|-------------|---------|
 | `TRAEFIK_LOG_DASHBOARD_ACCESS_PATH` | Path to access log file/directory | `/var/log/traefik/access.log` |
 | `TRAEFIK_LOG_DASHBOARD_ERROR_PATH` | Path to error log file/directory | `/var/log/traefik/traefik.log` |
-| `TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN` | Authentication token | Required |
+| `TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN` | Authentication token. The agent rejects protected requests when this is empty | Required |
 | `TRAEFIK_LOG_DASHBOARD_SYSTEM_MONITORING` | Enable system monitoring | `true` |
 | `TRAEFIK_LOG_DASHBOARD_LOG_FORMAT` | Log format (`json` or `common`) | `json` |
 | `PORT` | Agent listen port | `5000` |

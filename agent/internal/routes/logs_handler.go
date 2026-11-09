@@ -84,6 +84,26 @@ func (h *Handler) handleLogs(w http.ResponseWriter, r *http.Request, path string
 	utils.RespondJSON(w, http.StatusOK, result)
 }
 
+// resolveLogFilename joins filename onto base and rejects paths that escape base.
+func resolveLogFilename(base, filename string) (string, error) {
+	if filename == "" || strings.Contains(filename, "\x00") {
+		return "", fmt.Errorf("invalid filename")
+	}
+
+	cleaned := filepath.Clean(filename)
+	if cleaned == "." || filepath.IsAbs(cleaned) || cleaned == ".." || strings.HasPrefix(cleaned, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid filename")
+	}
+
+	root := filepath.Clean(base)
+	full := filepath.Join(root, cleaned)
+	rel, err := filepath.Rel(root, full)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("invalid filename")
+	}
+	return full, nil
+}
+
 // HandleGetLog handles requests for a specific log file
 func (h *Handler) HandleGetLog(w http.ResponseWriter, r *http.Request) {
 	filename := utils.GetQueryParam(r, "filename", "")
@@ -95,7 +115,11 @@ func (h *Handler) HandleGetLog(w http.ResponseWriter, r *http.Request) {
 	position := utils.GetQueryParamInt64(r, "position", 0)
 	lines := utils.GetQueryParamInt(r, "lines", 100)
 
-	fullPath := filepath.Join(h.config.AccessPath, filename)
+	fullPath, err := resolveLogFilename(h.config.AccessPath, filename)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "invalid filename")
+		return
+	}
 
 	positions := []logs.Position{{Position: position, Filename: filename}}
 	result, err := logs.GetLogs(fullPath, positions, false, false)

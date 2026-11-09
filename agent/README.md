@@ -58,7 +58,7 @@ By default, system monitoring is disabled. To enable it, set the `TRAEFIK_LOG_DA
 
 ### Authentication
 
-When using the agent, it's recommended to set an authentication token. Set the private environment variable `TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN` to the same value for both the agent (server) and the dashboard (client) deployment.
+Set the private environment variable `TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN` to the same value for both the agent (server) and the dashboard (client) deployment. The agent rejects protected requests when the token is empty.
 
 The agent will verify that the auth token sent by the client matches the locally stored value before allowing access to the logs.
 

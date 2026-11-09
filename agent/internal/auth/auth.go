@@ -21,9 +21,9 @@ func NewAuthenticator(token string) *Authenticator {
 // Middleware returns an HTTP middleware that validates Bearer tokens
 func (a *Authenticator) Middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// If no token is configured, skip authentication
+		// Fail closed: an empty token must not leave the API open.
 		if a.token == "" {
-			next(w, r)
+			http.Error(w, "unauthorized: authentication is not configured", http.StatusUnauthorized)
 			return
 		}
 

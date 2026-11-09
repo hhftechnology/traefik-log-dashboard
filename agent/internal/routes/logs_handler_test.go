@@ -13,6 +13,49 @@ import (
 	"github.com/hhftechnology/traefik-log-dashboard/agent/internal/state"
 )
 
+func TestResolveLogFilenameRejectsTraversal(t *testing.T) {
+	base := filepath.Join(t.TempDir(), "logs")
+	if err := os.Mkdir(base, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	secret := filepath.Join(filepath.Dir(base), "secret.txt")
+	if err := os.WriteFile(secret, []byte("secret"), 0o600); err != nil {
+		t.Fatalf("write secret: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "access.log"), []byte("ok"), 0o644); err != nil {
+		t.Fatalf("write log: %v", err)
+	}
+
+	got, err := resolveLogFilename(base, "access.log")
+	if err != nil {
+		t.Fatalf("expected access.log to be allowed: %v", err)
+	}
+	if _, statErr := os.Stat(got); statErr != nil {
+		t.Fatalf("resolved file missing: %v", statErr)
+	}
+
+	for _, name := range []string{"../secret.txt", "..", "/etc/passwd"} {
+		if _, err := resolveLogFilename(base, name); err == nil {
+			t.Fatalf("expected %q to be rejected", name)
+		}
+	}
+}
+
+func TestHandleGetLogRejectsTraversal(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.Config{AccessPath: filepath.Join(dir, "logs")}
+	if err := os.Mkdir(cfg.AccessPath, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	h := NewHandler(cfg, state.NewStateManager(cfg))
+	req := httptest.NewRequest("GET", "/api/logs/get?filename=../../etc/passwd", nil)
+	rr := httptest.NewRecorder()
+	h.HandleGetLog(rr, req)
+	if rr.Code != 400 {
+		t.Fatalf("expected 400, got %d (%s)", rr.Code, rr.Body.String())
+	}
+}
+
 func TestHandleStreamAccessLogs(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "access.log")

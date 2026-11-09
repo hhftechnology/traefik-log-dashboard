@@ -59,7 +59,7 @@ func main() {
 	if authenticator.IsEnabled() {
 		logger.Log.Printf("Authentication: Enabled")
 	} else {
-		logger.Log.Printf("Authentication: Disabled (no token configured)")
+		logger.Log.Printf("Authentication: rejecting requests because TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN is empty")
 	}
 
 	// Initialize state manager

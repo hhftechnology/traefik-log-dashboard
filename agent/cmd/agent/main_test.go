@@ -113,7 +113,7 @@ func TestAuthenticationMiddleware(t *testing.T) {
 			name:           "No token configured",
 			token:          "",
 			authHeader:     "",
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusUnauthorized,
 		},
 	}
 

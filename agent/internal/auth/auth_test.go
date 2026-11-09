@@ -13,8 +13,6 @@ var okHandler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 })
 
 func TestMiddleware_NoTokenConfigured(t *testing.T) {
-	// When no token is configured, the middleware must be a no-op and every
-	// request must reach the inner handler regardless of headers.
 	a := NewAuthenticator("")
 
 	handler := a.Middleware(okHandler)
@@ -23,8 +21,11 @@ func TestMiddleware_NoTokenConfigured(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d", http.StatusUnauthorized, rec.Code)
+	}
+	if !contains(rec.Body.String(), "authentication is not configured") {
+		t.Fatalf("expected unconfigured message, got %q", rec.Body.String())
 	}
 }
 
@@ -139,7 +140,7 @@ func TestIsEnabled(t *testing.T) {
 		token string
 		want  bool
 	}{
-		{name: "empty token disables auth", token: "", want: false},
+		{name: "empty token is not a configured credential", token: "", want: false},
 		{name: "non-empty token enables auth", token: "any-secret", want: true},
 	}
 
