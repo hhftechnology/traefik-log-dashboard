@@ -87,7 +87,9 @@ services:
     environment:
       # Agent Configuration - REPLACE WITH YOUR TOKEN
       - AGENT_API_URL=http://traefik-agent:5000
-      - AGENT_API_TOKEN=d41d8cd98f00b204e9800998ecf8427e
+      - AGENT_API_TOKEN=replace-with-agent-token
+      # Required for dashboard management routes
+      - DASHBOARD_API_TOKEN=replace-with-dashboard-api-token
       - AGENT_NAME=Default Agent
       
       # Node Environment
@@ -163,6 +165,7 @@ Open http://localhost:3000 in your browser.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `DASHBOARD_API_TOKEN` | Bearer token required by `/api/dashboard/agents` | Required |
 | `AGENT_1_URL` | First environment agent URL | Required (or `DASHBOARD_AGENTS_JSON`) |
 | `AGENT_1_TOKEN` | First environment agent token | Optional |
 | `AGENT_1_NAME` | First environment agent name | `Agent 1` |

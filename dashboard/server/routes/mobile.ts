@@ -85,8 +85,7 @@ function extractClientIp(log: Record<string, unknown>): string {
 }
 
 function serializeAgentForMobile(row: DBAgent) {
-  const { token, ...rest } = serializeAgent(row);
-  return rest;
+  return serializeAgent(row);
 }
 
 // --- Dashboard-local endpoints ---

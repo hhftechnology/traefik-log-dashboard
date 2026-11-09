@@ -1,8 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.omitBlankToken = omitBlankToken;
 const express_1 = require("express");
+const auth_1 = require("../auth");
 const db_1 = require("../db");
 const router = (0, express_1.Router)();
+router.use(auth_1.requireDashboardAuth);
+function omitBlankToken(updates) {
+    if (updates.token !== '') {
+        return updates;
+    }
+    const next = { ...updates };
+    delete next.token;
+    return next;
+}
 function rejectWhenEnvOnly(res) {
     if (!(0, db_1.isEnvOnlyAgentsMode)()) {
         return false;
@@ -44,7 +55,8 @@ router.patch('/', (req, res) => {
     if (rejectWhenEnvOnly(res)) {
         return;
     }
-    const { id, ...updates } = req.body;
+    const { id, ...rawUpdates } = req.body;
+    const updates = omitBlankToken(rawUpdates);
     if (!id) {
         res.status(400).json({ error: 'id is required' });
         return;

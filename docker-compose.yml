@@ -55,6 +55,9 @@ services:
       # - AGENT_2_URL=http://traefik-agent-staging:5000
       # - AGENT_2_TOKEN=another-token
 
+      # Required for /api/dashboard/agents. Replace before exposing the dashboard.
+      - DASHBOARD_API_TOKEN=replace-with-dashboard-api-token
+
       # Lock agent configuration to environment-only mode
       - DASHBOARD_AGENTS_ENV_ONLY=true
 

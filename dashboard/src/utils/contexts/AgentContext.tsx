@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useCallback, useMemo } from
 import { useMountEffect } from '@/hooks/useMountEffect';
 import { Agent } from '../types/agent';
 import { toast } from 'sonner';
+import { dashboardAuthHeaders } from '../dashboard-auth';
 import { agentStore } from '../stores/agent-store';
 
 interface AgentContextType {
@@ -111,7 +112,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
       // Use server-side status check — this can reach internal Docker URLs
       const response = await fetch('/api/dashboard/agents/check-status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...dashboardAuthHeaders() },
         body: JSON.stringify({ id }),
         signal,
       });

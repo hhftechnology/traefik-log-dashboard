@@ -183,12 +183,14 @@ export default function AgentFormModal({ isOpen, onClose, agent }: AgentFormModa
               type="password"
               value={formData.token}
               onChange={(e) => setFormData({ ...formData, token: e.target.value })}
-              placeholder="your-secret-token"
+              placeholder={agent?.tokenSet ? 'Leave blank to keep the stored token' : 'your-secret-token'}
               className="w-full px-4 py-2 border border-input rounded-lg bg-card text-foreground focus:ring-2 focus:ring-primary focus:border-transparent font-mono text-sm"
-              required
+              required={!agent}
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              The TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN configured on the agent
+              {agent?.tokenSet
+                ? 'A token is already stored. Enter a new value to replace it, or leave this blank.'
+                : 'The TRAEFIK_LOG_DASHBOARD_AUTH_TOKEN configured on the agent'}
             </p>
           </div>
 

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { requireDashboardAuth } from '../auth';
 import {
   getAllAgents,
   getAgentById,
@@ -13,6 +14,17 @@ import {
 } from '../db';
 
 const router = Router();
+
+router.use(requireDashboardAuth);
+
+export function omitBlankToken(updates: Record<string, unknown>): Record<string, unknown> {
+  if (updates.token !== '') {
+    return updates;
+  }
+  const next = { ...updates };
+  delete next.token;
+  return next;
+}
 
 function rejectWhenEnvOnly(res: Response): boolean {
   if (!isEnvOnlyAgentsMode()) {
@@ -64,7 +76,8 @@ router.patch('/', (req: Request, res: Response) => {
     return;
   }
 
-  const { id, ...updates } = req.body;
+  const { id, ...rawUpdates } = req.body;
+  const updates = omitBlankToken(rawUpdates);
 
   if (!id) {
     res.status(400).json({ error: 'id is required' });

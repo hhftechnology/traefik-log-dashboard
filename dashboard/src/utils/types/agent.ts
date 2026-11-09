@@ -3,7 +3,8 @@ export interface Agent {
   name: string; // Display name (e.g., "Production Server", "Staging Server")
   url: string; // Agent API URL (used for browser API calls)
   configuredUrl?: string; // Original configured URL for display (e.g., container name, internal URL)
-  token?: string; // Authentication token (optional; env-managed agents may not need one)
+  token?: string; // Write-only. API responses omit this and report tokenSet instead.
+  tokenSet?: boolean; // True when the server has a stored token for this agent.
   source?: 'env' | 'user'; // Agent origin. env agents are protected in UI/store.
   location: 'on-site' | 'off-site'; // Deployment location
   number: number; // Sequential agent number

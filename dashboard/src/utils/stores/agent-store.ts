@@ -1,4 +1,12 @@
+import { dashboardAuthHeaders } from '../dashboard-auth';
 import { Agent } from '../types/agent';
+
+function managementHeaders(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    ...dashboardAuthHeaders(),
+  };
+}
 
 const API_BASE = '/api/dashboard/agents';
 const LEGACY_STORAGE_KEY = 'tld-agents';
@@ -11,7 +19,7 @@ let cachedSelectedId: string | null = null;
 let initPromise: Promise<void> | null = null;
 
 async function fetchAgents(): Promise<Agent[]> {
-  const response = await fetch(API_BASE);
+  const response = await fetch(API_BASE, { headers: managementHeaders() });
   if (!response.ok) {
     throw new Error(`Failed to fetch agents: ${response.status}`);
   }
@@ -65,7 +73,7 @@ async function migrateFromLocalStorage(): Promise<void> {
     if (userAgents.length > 0) {
       await fetch(`${API_BASE}/import`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: managementHeaders(),
         body: JSON.stringify({ agents: userAgents }),
       });
     }
@@ -123,7 +131,7 @@ export const agentStore = {
 
     fetch(API_BASE, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: managementHeaders(),
       body: JSON.stringify(agent),
     })
       .then((response) => response.json())
@@ -166,7 +174,7 @@ export const agentStore = {
 
     fetch(API_BASE, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: managementHeaders(),
       body: JSON.stringify({ id, ...updates }),
     }).catch((error) => console.error('[agent-store] updateAgent failed:', error));
 
@@ -190,7 +198,7 @@ export const agentStore = {
       setSessionSelectedID(cachedSelectedId);
     }
 
-    fetch(`${API_BASE}?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+    fetch(`${API_BASE}?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: managementHeaders() })
       .catch((error) => console.error('[agent-store] deleteAgent failed:', error));
   },
 

@@ -505,7 +505,7 @@ export function serializeAgent(row: DBAgent) {
     name: row.name,
     url: row.url,
     configuredUrl: row.configured_url ?? undefined,
-    token: row.token,
+    tokenSet: row.token.length > 0,
     source: row.source as 'env' | 'user',
     location: row.location as 'on-site' | 'off-site',
     number: row.number,

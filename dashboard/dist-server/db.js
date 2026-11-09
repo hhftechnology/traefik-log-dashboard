@@ -370,7 +370,7 @@ function serializeAgent(row) {
         name: row.name,
         url: row.url,
         configuredUrl: row.configured_url ?? undefined,
-        token: row.token,
+        tokenSet: row.token.length > 0,
         source: row.source,
         location: row.location,
         number: row.number,
