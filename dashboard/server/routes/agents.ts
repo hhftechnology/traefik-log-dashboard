@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireDashboardAuth } from '../auth';
+import { isAllowedProxyTarget } from '../proxy-allowlist';
 import {
   getAllAgents,
   getAgentById,
@@ -57,6 +58,11 @@ router.post('/', (req: Request, res: Response) => {
     return;
   }
 
+  if (!isAllowedProxyTarget(configuredUrl || url)) {
+    res.status(400).json({ error: 'agent url is not in DASHBOARD_PROXY_ALLOWLIST' });
+    return;
+  }
+
   const agent = addAgent({
     name,
     url,
@@ -81,6 +87,17 @@ router.patch('/', (req: Request, res: Response) => {
 
   if (!id) {
     res.status(400).json({ error: 'id is required' });
+    return;
+  }
+
+  const nextUrl = typeof updates.url === 'string' ? updates.url : undefined;
+  const nextConfigured = typeof updates.configuredUrl === 'string'
+    ? updates.configuredUrl
+    : typeof updates.configured_url === 'string'
+      ? updates.configured_url
+      : undefined;
+  if ((nextUrl || nextConfigured) && !isAllowedProxyTarget(nextConfigured || nextUrl || '')) {
+    res.status(400).json({ error: 'agent url is not in DASHBOARD_PROXY_ALLOWLIST' });
     return;
   }
 
@@ -156,6 +173,12 @@ router.post('/check-status', async (req: Request, res: Response) => {
     return;
   }
 
+  const agentUrl = (agent.configured_url || agent.url).replace(/\/+$/, '');
+  if (!isAllowedProxyTarget(agentUrl)) {
+    res.status(403).json({ error: 'agent url is not in DASHBOARD_PROXY_ALLOWLIST' });
+    return;
+  }
+
   // Update to checking
   updateAgent(id, { status: 'checking' });
 
@@ -167,8 +190,6 @@ router.post('/check-status', async (req: Request, res: Response) => {
     if (agent.token) {
       headers['Authorization'] = `Bearer ${agent.token}`;
     }
-
-    const agentUrl = (agent.configured_url || agent.url).replace(/\/+$/, '');
 
     const response = await fetch(`${agentUrl}/api/logs/status`, {
       headers,
@@ -209,6 +230,23 @@ router.post('/import', (req: Request, res: Response) => {
 
   if (!Array.isArray(agents)) {
     res.status(400).json({ error: 'agents array is required' });
+    return;
+  }
+
+  const disallowed = agents.some((agent) => {
+    if (!agent || typeof agent !== 'object') {
+      return true;
+    }
+    const record = agent as { url?: unknown; configuredUrl?: unknown };
+    const target = typeof record.configuredUrl === 'string' && record.configuredUrl
+      ? record.configuredUrl
+      : typeof record.url === 'string'
+        ? record.url
+        : '';
+    return !isAllowedProxyTarget(target);
+  });
+  if (disallowed) {
+    res.status(400).json({ error: 'agent url is not in DASHBOARD_PROXY_ALLOWLIST' });
     return;
   }
 

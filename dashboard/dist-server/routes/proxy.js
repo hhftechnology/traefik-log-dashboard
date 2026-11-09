@@ -1,10 +1,12 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.normalizeProxyTarget = void 0;
 exports.getAgentIDFromRequest = getAgentIDFromRequest;
-exports.normalizeProxyTarget = normalizeProxyTarget;
 const express_1 = require("express");
 const http_proxy_middleware_1 = require("http-proxy-middleware");
 const db_1 = require("../db");
+const proxy_allowlist_1 = require("../proxy-allowlist");
+Object.defineProperty(exports, "normalizeProxyTarget", { enumerable: true, get: function () { return proxy_allowlist_1.normalizeProxyTarget; } });
 const router = (0, express_1.Router)();
 function getAgentIDFromRequest(req) {
     const raw = req.header('x-agent-id');
@@ -12,13 +14,6 @@ function getAgentIDFromRequest(req) {
         return '';
     }
     return raw.trim();
-}
-function normalizeProxyTarget(url) {
-    const normalized = url.replace(/\/+$/, '');
-    if (/^https?:\/\//i.test(normalized)) {
-        return normalized;
-    }
-    return `http://${normalized}`;
 }
 function resolveProxyAgent(req, res, next) {
     const agentID = getAgentIDFromRequest(req);
@@ -37,9 +32,17 @@ function resolveProxyAgent(req, res, next) {
         });
         return;
     }
+    const target = (0, proxy_allowlist_1.normalizeProxyTarget)(agent.configured_url || agent.url);
+    if (!(0, proxy_allowlist_1.isAllowedProxyTarget)(target)) {
+        res.status(403).json({
+            error: 'Proxy target is not allowed',
+            message: 'The agent URL is not in DASHBOARD_PROXY_ALLOWLIST.',
+        });
+        return;
+    }
     req.proxyAgent = {
         id: agent.id,
-        target: normalizeProxyTarget(agent.configured_url || agent.url),
+        target,
         token: agent.token || '',
     };
     next();
@@ -49,7 +52,13 @@ function resolveProxyAgent(req, res, next) {
 const proxyPaths = ['/api/logs', '/api/system'];
 for (const basePath of proxyPaths) {
     router.use(basePath, resolveProxyAgent, (0, http_proxy_middleware_1.createProxyMiddleware)({
-        router: (req) => req.proxyAgent?.target || 'http://localhost:5000',
+        router: (req) => {
+            const target = req.proxyAgent?.target;
+            if (!target || !(0, proxy_allowlist_1.isAllowedProxyTarget)(target)) {
+                throw new Error('Proxy target is not allowed');
+            }
+            return target;
+        },
         changeOrigin: true,
         on: {
             proxyReq: (proxyReq, req) => {

@@ -90,6 +90,7 @@ services:
       - AGENT_API_TOKEN=replace-with-agent-token
       # Required for dashboard management routes
       - DASHBOARD_API_TOKEN=replace-with-dashboard-api-token
+      - DASHBOARD_PROXY_ALLOWLIST=traefik-agent:5000
       - AGENT_NAME=Default Agent
       
       # Node Environment
@@ -166,6 +167,7 @@ Open http://localhost:3000 in your browser.
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DASHBOARD_API_TOKEN` | Bearer token required by `/api/dashboard/agents` | Required |
+| `DASHBOARD_PROXY_ALLOWLIST` | Comma-separated hosts the dashboard may proxy to (`host`, `host:port`, or origin) | Required |
 | `AGENT_1_URL` | First environment agent URL | Required (or `DASHBOARD_AGENTS_JSON`) |
 | `AGENT_1_TOKEN` | First environment agent token | Optional |
 | `AGENT_1_NAME` | First environment agent name | `Agent 1` |

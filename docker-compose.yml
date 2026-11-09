@@ -57,6 +57,7 @@ services:
 
       # Required for /api/dashboard/agents. Replace before exposing the dashboard.
       - DASHBOARD_API_TOKEN=replace-with-dashboard-api-token
+      - DASHBOARD_PROXY_ALLOWLIST=traefik-agent:5000
 
       # Lock agent configuration to environment-only mode
       - DASHBOARD_AGENTS_ENV_ONLY=true

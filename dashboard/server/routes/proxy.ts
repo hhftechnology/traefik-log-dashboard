@@ -1,6 +1,9 @@
 import { NextFunction, Request, Response, Router } from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { getAgentById } from '../db';
+import { isAllowedProxyTarget, normalizeProxyTarget } from '../proxy-allowlist';
+
+export { normalizeProxyTarget };
 
 const router = Router();
 
@@ -22,14 +25,6 @@ export function getAgentIDFromRequest(req: Request): string {
   return raw.trim();
 }
 
-export function normalizeProxyTarget(url: string): string {
-  const normalized = url.replace(/\/+$/, '');
-  if (/^https?:\/\//i.test(normalized)) {
-    return normalized;
-  }
-  return `http://${normalized}`;
-}
-
 function resolveProxyAgent(req: ProxyRequest, res: Response, next: NextFunction): void {
   const agentID = getAgentIDFromRequest(req);
   if (!agentID) {
@@ -49,9 +44,18 @@ function resolveProxyAgent(req: ProxyRequest, res: Response, next: NextFunction)
     return;
   }
 
+  const target = normalizeProxyTarget(agent.configured_url || agent.url);
+  if (!isAllowedProxyTarget(target)) {
+    res.status(403).json({
+      error: 'Proxy target is not allowed',
+      message: 'The agent URL is not in DASHBOARD_PROXY_ALLOWLIST.',
+    });
+    return;
+  }
+
   req.proxyAgent = {
     id: agent.id,
-    target: normalizeProxyTarget(agent.configured_url || agent.url),
+    target,
     token: agent.token || '',
   };
 
@@ -67,7 +71,13 @@ for (const basePath of proxyPaths) {
     basePath,
     resolveProxyAgent,
     createProxyMiddleware({
-      router: (req) => (req as ProxyRequest).proxyAgent?.target || 'http://localhost:5000',
+      router: (req) => {
+        const target = (req as ProxyRequest).proxyAgent?.target;
+        if (!target || !isAllowedProxyTarget(target)) {
+          throw new Error('Proxy target is not allowed');
+        }
+        return target;
+      },
       changeOrigin: true,
       on: {
         proxyReq: (proxyReq, req) => {

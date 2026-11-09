@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.omitBlankToken = omitBlankToken;
 const express_1 = require("express");
 const auth_1 = require("../auth");
+const proxy_allowlist_1 = require("../proxy-allowlist");
 const db_1 = require("../db");
 const router = (0, express_1.Router)();
 router.use(auth_1.requireDashboardAuth);
@@ -39,6 +40,10 @@ router.post('/', (req, res) => {
         res.status(400).json({ error: 'name and url are required' });
         return;
     }
+    if (!(0, proxy_allowlist_1.isAllowedProxyTarget)(configuredUrl || url)) {
+        res.status(400).json({ error: 'agent url is not in DASHBOARD_PROXY_ALLOWLIST' });
+        return;
+    }
     const agent = (0, db_1.addAgent)({
         name,
         url,
@@ -59,6 +64,16 @@ router.patch('/', (req, res) => {
     const updates = omitBlankToken(rawUpdates);
     if (!id) {
         res.status(400).json({ error: 'id is required' });
+        return;
+    }
+    const nextUrl = typeof updates.url === 'string' ? updates.url : undefined;
+    const nextConfigured = typeof updates.configuredUrl === 'string'
+        ? updates.configuredUrl
+        : typeof updates.configured_url === 'string'
+            ? updates.configured_url
+            : undefined;
+    if ((nextUrl || nextConfigured) && !(0, proxy_allowlist_1.isAllowedProxyTarget)(nextConfigured || nextUrl || '')) {
+        res.status(400).json({ error: 'agent url is not in DASHBOARD_PROXY_ALLOWLIST' });
         return;
     }
     const updated = (0, db_1.updateAgent)(id, updates);
@@ -119,6 +134,11 @@ router.post('/check-status', async (req, res) => {
         res.status(404).json({ error: 'Agent not found' });
         return;
     }
+    const agentUrl = (agent.configured_url || agent.url).replace(/\/+$/, '');
+    if (!(0, proxy_allowlist_1.isAllowedProxyTarget)(agentUrl)) {
+        res.status(403).json({ error: 'agent url is not in DASHBOARD_PROXY_ALLOWLIST' });
+        return;
+    }
     // Update to checking
     (0, db_1.updateAgent)(id, { status: 'checking' });
     try {
@@ -128,7 +148,6 @@ router.post('/check-status', async (req, res) => {
         if (agent.token) {
             headers['Authorization'] = `Bearer ${agent.token}`;
         }
-        const agentUrl = (agent.configured_url || agent.url).replace(/\/+$/, '');
         const response = await fetch(`${agentUrl}/api/logs/status`, {
             headers,
             signal: controller.signal,
@@ -162,6 +181,22 @@ router.post('/import', (req, res) => {
     const { agents } = req.body;
     if (!Array.isArray(agents)) {
         res.status(400).json({ error: 'agents array is required' });
+        return;
+    }
+    const disallowed = agents.some((agent) => {
+        if (!agent || typeof agent !== 'object') {
+            return true;
+        }
+        const record = agent;
+        const target = typeof record.configuredUrl === 'string' && record.configuredUrl
+            ? record.configuredUrl
+            : typeof record.url === 'string'
+                ? record.url
+                : '';
+        return !(0, proxy_allowlist_1.isAllowedProxyTarget)(target);
+    });
+    if (disallowed) {
+        res.status(400).json({ error: 'agent url is not in DASHBOARD_PROXY_ALLOWLIST' });
         return;
     }
     const imported = (0, db_1.bulkImportAgents)(agents);
